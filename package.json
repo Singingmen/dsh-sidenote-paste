@@ -1,5 +1,5 @@
 {
-  "name": "dsh-sidenote",
+  "name": "dsh-sidenote-paste",
   "version": "0.4.4",
   "description": "DSH web plugin: Codex-style side chat (fork the current session into a persistent side panel) + selection annotations with numbered badges and a composer chip. Runs directly on the DSH native right sidebar (DSH ≥ 0.1.5); dsh-better-sidebar is an optional peer for older hosts. / Codex 风格侧边聊天 + 划选注释的 DSH 插件。",
   "type": "module",
@@ -28,7 +28,15 @@
     },
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-runtime"
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-modules",
+        "@deepseek-ai/dsh-client-ui-commands",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-input-trigger",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
       ],
       "platform": "web"
     },
@@ -72,10 +80,10 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.2",
-    "@deepseek-ai/dsh-api-remotes": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-client-ui-primitives": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-llm": "0.1.5-rc.2",
-    "@deepseek-ai/dsh-tools": "0.1.5-rc.2",
+    "@deepseek-ai/dsh-api-remotes": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-llm": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-tools": "0.1.7-rc.2",
     "@playwright/test": "^1.50.0",
     "@shikijs/langs": "^4.4.3",
     "@types/mdast": "^4.0.4",
@@ -120,9 +128,18 @@
   "homepage": "https://github.com/g-yixuan/dsh-sidenote#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/g-yixuan/dsh-sidenote.git"
+    "url": "https://local.invalid/dsh-sidenote-paste"
   },
-  "bugs": "https://github.com/g-yixuan/dsh-sidenote/issues",
+  "bugs": {
+    "url": "https://github.com/g-yixuan/dsh-sidenote/issues",
+    "note": "Issues belong to the upstream project; this fork takes no reports."
+  },
   "author": "gyixuan",
+  "upstream": {
+    "name": "dsh-sidenote",
+    "repo": "https://github.com/g-yixuan/dsh-sidenote",
+    "tag": "v0.4.4",
+    "note": "本地 0.1.7 兼容 fork（包名 dsh-sidenote-paste）。与上游无自动同步；上游修好后两者可并存。"
+  },
   "packageManager": "pnpm@11.26.0"
 }

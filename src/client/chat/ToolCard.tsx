@@ -10,16 +10,16 @@ import { useSyncExternalStore, type ReactNode } from 'react'
 import {
   DisclosureRow,
   DiffBlock,
-  IconChecklistOutline14,
-  IconCodeOutline16,
-  IconCordisPluginOutline14,
-  IconEditOutline16,
-  IconGlobeOutline14,
-  IconListPenOutline16,
-  IconPlayOutline16,
-  IconRightUpOutline16,
-  IconSearchOutline16,
-  IconTrashOutline16,
+  IconChecklistOutlineRegular,
+  IconCodeOutlineRegular,
+  IconCordisPluginOutlineRegular,
+  IconEditOutlineRegular,
+  IconGlobeOutlineRegular,
+  IconListPenOutlineRegular,
+  IconPlayOutlineRegular,
+  IconRightUpOutlineRegular,
+  IconSearchOutlineRegular,
+  IconTrashOutlineRegular,
   JsonTree,
   ReadBlock,
   SearchBlock,
@@ -35,14 +35,14 @@ import css from '../sidechat/sidechat.module.css'
 /** ToolCallKind → 图标（宿主 ui-tool 同族映射；primitives 图标全集见 icons/index.d.ts）。 */
 function kindIcon(kind: ToolCallKind): ReactNode {
   switch (kind) {
-    case 'read': return <IconListPenOutline16 size={14} />
-    case 'edit': return <IconEditOutline16 size={14} />
-    case 'delete': return <IconTrashOutline16 size={14} />
-    case 'move': return <IconRightUpOutline16 size={14} />
-    case 'search': return <IconSearchOutline16 size={14} />
-    case 'execute': return <IconPlayOutline16 size={14} />
-    case 'fetch': return <IconGlobeOutline14 size={14} />
-    default: return <IconCordisPluginOutline14 size={14} />
+    case 'read': return <IconListPenOutlineRegular size={14} />
+    case 'edit': return <IconEditOutlineRegular size={14} />
+    case 'delete': return <IconTrashOutlineRegular size={14} />
+    case 'move': return <IconRightUpOutlineRegular size={14} />
+    case 'search': return <IconSearchOutlineRegular size={14} />
+    case 'execute': return <IconPlayOutlineRegular size={14} />
+    case 'fetch': return <IconGlobeOutlineRegular size={14} />
+    default: return <IconCordisPluginOutlineRegular size={14} />
   }
 }
 
@@ -58,14 +58,14 @@ export function ToolCard(props: { model: ToolCardModel; rowKey: string; fold: Fo
   const { model, rowKey, fold } = props
   const open = useFoldOpen(fold, rowKey)
   const icon = model.kind === 'terminal'
-    ? <IconPlayOutline16 size={14} />
+    ? <IconPlayOutlineRegular size={14} />
     : model.kind === 'diff'
-      ? <IconEditOutline16 size={14} />
+      ? <IconEditOutlineRegular size={14} />
       : model.kind === 'read'
-        ? <IconCodeOutline16 size={14} />
+        ? <IconCodeOutlineRegular size={14} />
         : model.kind === 'todo'
-          ? <IconChecklistOutline14 size={14} />
-          : model.kind === 'generic' ? kindIcon(model.icon) : <IconCordisPluginOutline14 size={14} />
+          ? <IconChecklistOutlineRegular size={14} />
+          : model.kind === 'generic' ? kindIcon(model.icon) : <IconCordisPluginOutlineRegular size={14} />
 
   return (
     <div className={css.flowRow}>

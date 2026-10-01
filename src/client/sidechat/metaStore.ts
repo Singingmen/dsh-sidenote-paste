@@ -52,6 +52,9 @@ export interface SideChatMetaRecord {
 
 const KEY_PREFIX = 'dsh-sidenote:side-meta:v1:'
 
+/** better-sidebar ≥ 0.19 持久化右栏布局的 localStorage 键前缀（宿主侧约定）。 */
+const NATIVE_LAYOUT_KEY_PREFIX = 'dsh.sidebar-right.v1.'
+
 /**
  * 本页面生命周期 id。**挂在 window 上**（审查 m3）：模块级铸造会在插件
  * HMR/重载时换模块实例 → 新 runId 触发孤键清扫误删本页活记录。window
@@ -191,11 +194,58 @@ export function nextSideChatNumber(sessionId: string): number {
 }
 
 /**
- * 孤键清扫：删掉 runId 与本页面生命周期不匹配的记录（上一页面周期的
- * 残留——原生布局刷新即空，这些键指向的 tab 已不存在）。插件 apply 时
- * 调用一次。返回清扫数。
+ * 读当前宿主布局里存活的 tab id 集合（供孤键清扫判定）。
+ *
+ * 优先问原生布局 store（better-sidebar 0.19+ 把右栏布局持久化在
+ * `dsh.sidebar-right.v1.session-<id>`）；读不到时回退 legacy 布局服务。
+ * **任何一步读不到都返回 undefined** —— sweep 对 undefined 一律不清
+ * （fail-open：宁可留一条死记录，也不误删活绑定引发重 fork）。
+ *
+ * @returns tab id 集合，或 undefined（无法判定）。
  */
-export function sweepOrphanedSideChatMeta(): number {
+export function readLiveTabIds(): ReadonlySet<string> | undefined {
+  if (typeof window === 'undefined') return undefined
+  try {
+    const ids = new Set<string>()
+    let sawLayout = false
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i)
+      if (key === null || !key.startsWith(NATIVE_LAYOUT_KEY_PREFIX)) continue
+      sawLayout = true
+      const raw = window.localStorage.getItem(key)
+      if (raw === null) continue
+      const parsed = JSON.parse(raw) as { bySession?: Record<string, { layout?: { tabs?: Record<string, unknown> } }> }
+      for (const entry of Object.values(parsed.bySession ?? {})) {
+        for (const tabId of Object.keys(entry?.layout?.tabs ?? {})) ids.add(tabId)
+      }
+    }
+    return sawLayout ? ids : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * 孤键清扫：删掉**指向已不存在 tab** 的记录。插件 apply 时调用一次。
+ *
+ * ⚠️ 0.1.7 修正（繁殖事故根因）：旧实现按 `runId !== SIDENOTE_RUN_ID` 判定
+ * 残留——而 runId 挂在 window 上，**每次页面刷新都换新**，于是每次刷新都把
+ * 上一轮带 childId 的活记录当孤儿删掉。面板随即读不到 childId → 重新 fork
+ * → **每次刷新繁殖一个侧边会话**（实测 19 个孤儿会话）。
+ *
+ * 旧前提「原生布局 memory-only，刷新后 tab 即空」在 better-sidebar 0.21.1
+ * 下不成立：原生右栏布局**持久化在 localStorage**
+ * （`dsh.sidebar-right.v1.session-*`），刷新后 tab 仍在、记录却没了。
+ *
+ * 现改为**布局感知**：只有记录指向的 tab 确实不在当前宿主布局里才算孤儿。
+ * 拿不到布局面时**一律不清**（fail-open：宁可留一条死记录，也不误删活绑定
+ * 引发重 fork）。
+ *
+ * @param liveTabIds - 当前宿主布局里的 tab id 集合；undefined = 无法判定。
+ * @returns 清扫条数。
+ */
+export function sweepOrphanedSideChatMeta(liveTabIds?: ReadonlySet<string>): number {
+  if (liveTabIds === undefined) return 0
   const store = storage()
   if (store === null) return 0
   try {
@@ -204,7 +254,10 @@ export function sweepOrphanedSideChatMeta(): number {
       const key = store.key(i)
       if (typeof key !== 'string' || !key.startsWith(KEY_PREFIX)) continue
       const record = revive(JSON.parse(store.getItem(key) ?? 'null'))
-      if (record === null || record.runId !== SIDENOTE_RUN_ID) staleKeys.push(key)
+      if (record === null) { staleKeys.push(key); continue }
+      // tab 还在 → 记录是活的（哪怕跨了页面周期，childId 仍指向有效会话）。
+      if (liveTabIds.has(record.tabId)) continue
+      staleKeys.push(key)
     }
     for (const key of staleKeys) store.removeItem(key)
     if (staleKeys.length > 0) notify()

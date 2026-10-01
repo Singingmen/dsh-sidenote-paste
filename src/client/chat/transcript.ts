@@ -34,6 +34,8 @@ export interface ChatMessage {
   interrupted?: boolean
   /** tool 角色的渲染意图（card union 已映射为视图模型；缺省 = 纯文本卡）。 */
   card?: ToolCardModel
+  /** 用户消息携带的图片附件引用（ImageBlock.attachment；renderer 用它拉缩略图）。 */
+  images?: readonly unknown[]
 }
 
 /** 工具结果正文截断上限（面板是窄栏，超长输出不撑爆 DOM）。 */
@@ -61,6 +63,30 @@ export function contentTextOf(content: unknown): string {
     else if (b.type === 'image') parts.push(t('imagePlaceholder'))
   }
   return parts.join('\n')
+}
+
+/**
+ * 提取消息内容里的图片附件引用（0.1.7：`ImageBlock.attachment`）。
+ *
+ * 主对话经 `conversation.message.images` 槽把这些引用交给附件插件渲染成
+ * **缩略图 + 灯箱**；侧边面板此前只取文本（`contentTextOf` 把图片降级成
+ * 「[图片]」占位），用户视角「发出去的图变成一行字了」（实测报告）。
+ * 这里把引用一并带出，由 rows.tsx 用宿主的图片加载面渲染同款缩略图。
+ *
+ * @param content - 消息的 content 块数组。
+ * @returns 图片引用列表（无图时返回空对象，便于 `...` 展开）。
+ */
+function imagesOf(content: unknown): { images?: readonly unknown[] } {
+  if (!Array.isArray(content)) return {}
+  const images: unknown[] = []
+  for (const block of content) {
+    if (typeof block !== 'object' || block === null) continue
+    const b = block as { type?: unknown; attachment?: unknown }
+    if (b.type !== 'image') continue
+    // attachment 缺席（异常/降级 payload）时不入列——占位文本仍在，不丢信息。
+    if (b.attachment !== undefined && b.attachment !== null) images.push(b.attachment)
+  }
+  return images.length === 0 ? {} : { images }
 }
 
 function seqKey(prefix: string, node: Record<string, unknown>): string {
@@ -97,9 +123,9 @@ export function nodeToMessage(node: unknown): ChatMessage | null {
   const n = node as Record<string, unknown>
   switch (n.kind) {
     case 'user':
-      return { key: seqKey('u', n), ...seqOf(n), role: 'user', text: contentTextOf(n.content) }
+      return { key: seqKey('u', n), ...seqOf(n), role: 'user', text: contentTextOf(n.content), ...imagesOf(n.content) }
     case 'steering':
-      return { key: seqKey('s', n), ...seqOf(n), role: 'user', text: contentTextOf(n.content) }
+      return { key: seqKey('s', n), ...seqOf(n), role: 'user', text: contentTextOf(n.content), ...imagesOf(n.content) }
     case 'assistant': {
       const { text, reasoning, hasToolCall } = assistantParts(n.blocks)
       // 纯工具调用头的 assistant 节点不渲染（tool-result 节点承载工具卡片）。

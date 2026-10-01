@@ -3,7 +3,7 @@
  * 附件 rail。自 SideChatPanel.tsx 拆出（WI-02 主战场，面板壳只留编排）。
  */
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
-import { IconPaperclipOutline16, IconSendOutline16, IconStopFill16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconPaperclipOutlineRegular, IconSendOutlineRegular, IconStopFillRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context, SessionFace } from '../host/contracts.ts'
 import type { Composer } from './composer.ts'
 import { ModelMenu } from './ModelMenu.tsx'
@@ -47,7 +47,29 @@ export function ComposerBar(props: {
   return (
     <div className={css.composer}>
       {menuOpen && menuState !== null && triggerCtl !== null && (
-        <SlashMenuView state={menuState} onPick={(source, index) => { triggerCtl.pick(source, index) }} />
+        <SlashMenuView
+          state={menuState}
+          onPick={(source, index) => {
+            // 先补一次 track：`pick` 内部守卫 `this.hit !== null`，而 hit 由
+            // **最近一次 track** 设置——技能候选是异步 RPC 加载的，候选到达
+            // 时 hit 里的 span.draftRev 可能已过期，pick 会静默 no-op（症状：
+            // 普通命令能选，技能选不动）。用 textarea 现场值重放一次，把 hit
+            // 刷成本帧的（草稿未变，detectTrigger 仍命中同一 token）。
+            const el = inputRef.current
+            if (el !== null) {
+              triggerCtl.track(
+                el.value,
+                el.selectionStart ?? el.value.length,
+                guardOf(composer.phase),
+                composer.draftRev ?? 0,
+              )
+            }
+            triggerCtl.pick(source, index)
+            // pick 会经 pipeline 把 `/{name} ` 写回草稿；焦点还给输入框，
+            // 用户可直接继续打字（否则焦点停在已卸载的菜单按钮上）。
+            inputRef.current?.focus()
+          }}
+        />
       )}
       <div className={css.composerCard}>
         {composer.imagePreviews.length > 0 && (
@@ -70,6 +92,36 @@ export function ComposerBar(props: {
           className={css.input}
           placeholder={t('inputPlaceholder')}
           value={composer.draft}
+          // 粘贴图片（原生 textarea 只吃文本，图片数据会被丢弃）：从
+          // clipboardData 取 image/* 走附件通道；纯文本粘贴保持默认行为。
+          onPaste={(event) => {
+            if (!composer.canAttach) return
+            const items = event.clipboardData?.items
+            if (items === undefined || items === null) return
+            const files: File[] = []
+            for (const item of items) {
+              if (item.kind !== 'file' || !item.type.startsWith('image/')) continue
+              const file = item.getAsFile()
+              if (file !== null) files.push(file)
+            }
+            if (files.length === 0) return
+            // 有图片即接管本次粘贴（避免图片的二进制噪音落进 textarea）。
+            event.preventDefault()
+            composer.attachImages(files)
+          }}
+          // 拖拽图片文件进输入框（与附件按钮同一通道）。
+          onDrop={(event) => {
+            if (!composer.canAttach) return
+            const files = [...(event.dataTransfer?.files ?? [])].filter(f => f.type.startsWith('image/'))
+            if (files.length === 0) return
+            event.preventDefault()
+            composer.attachImages(files)
+          }}
+          onDragOver={(event) => {
+            if (composer.canAttach && event.dataTransfer?.types.includes('Files') === true) {
+              event.preventDefault()
+            }
+          }}
           onChange={(event) => {
             composer.setDraft(event.target.value)
             // 触发侦听（CAS 语义：带最新 draftRev，过期静默 no-op 由机器兜）。
@@ -110,7 +162,7 @@ export function ComposerBar(props: {
               aria-label={t('attachTitle')}
               onClick={() => { fileInputRef.current?.click() }}
             >
-              <IconPaperclipOutline16 size={14} />
+              <IconPaperclipOutlineRegular size={14} />
             </button>
           )}
           <input
@@ -142,7 +194,7 @@ export function ComposerBar(props: {
                 aria-label={t('stopReplyTitle')}
                 onClick={() => { session?.cancel().catch(() => {}) }}
               >
-                <IconStopFill16 size={12} />
+                <IconStopFillRegular size={12} />
               </button>
             )
             : (
@@ -154,7 +206,7 @@ export function ComposerBar(props: {
                 disabled={composer.draft.trim() === ''}
                 onClick={() => { composer.submit() }}
               >
-                <IconSendOutline16 size={14} />
+                <IconSendOutlineRegular size={14} />
               </button>
             )}
         </div>

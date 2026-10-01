@@ -15,9 +15,14 @@ import { createReflowStore } from './reflow.ts'
 import { registerSideChat } from './sidechat/index.tsx'
 import { registerAnnotations } from './annotate/index.tsx'
 import { clearNativeRuntime, setRootContext } from './sidechat/native.ts'
-import { sweepOrphanedSideChatMeta } from './sidechat/metaStore.ts'
+import { releaseAllRetained } from './sidechat/retain.ts'
+import { readLiveTabIds, sweepOrphanedSideChatMeta } from './sidechat/metaStore.ts'
 
-export const inject = ['sessions', 'workspaces', 'slots', 'connection', 'locale']
+// `inputTriggers` 必须在列：侧边 composer 的斜杠/@ 菜单走
+// `ctx.get('inputTriggers').sessionOf(actx)`，而 cordis 对**未 inject** 的
+// 服务属性访问抛错、ctx.get 恒返回 undefined —— 缺它会让 /plan 这类命令
+// 候选完全不出现（只能手打全名，实测报告为此症状）。
+export const inject = ['sessions', 'workspaces', 'slots', 'connection', 'locale', 'inputTriggers']
 
 export function apply(ctx: Context): void {
   // 侧栏 Tab 的原生面（better-sidebar >= 0.19）与宿主调用都要用插件根 ctx：
@@ -25,16 +30,22 @@ export function apply(ctx: Context): void {
   // fiber 撤销即清场（registry/openings/birthOrder 全模块级，重激活不得带病存活）。
   ctx.effect(() => {
     setRootContext(ctx)
-    return () => { clearNativeRuntime() }
+    return () => {
+      // 0.1.7：retain 的引用随 fiber 撤销一并释放（不留跨代际的会话占用）。
+      releaseAllRetained()
+      clearNativeRuntime()
+    }
   }, 'dsh-sidenote: native bridge')
   // 跟随 DSH 通用设置里的语言（locale.preference，Host-backed，实时切换）。
   attachLocale(ctx.locale as LocaleServiceLike | undefined)
   // T2 off-face 全景探测：宿主升级后哪些能力降级了，开发者工具里一眼可见。
   probeHost(ctx)
-  // 孤键清扫（对抗性审查 B2）：原生布局 memory-only，刷新后 tab 消失而
-  // metaStore 键残留——不清场则编排层把残留当存活 tab，入口折叠成聚焦一个
-  // 不存在的 tab（该会话侧聊死锁）。runId 不匹配的残留记录在此清掉。
-  sweepOrphanedSideChatMeta()
+  // 孤键清扫（对抗性审查 B2 的原意：清掉指向已消失 tab 的记录）。
+  // 0.1.7 修正：判定改为**布局感知**——旧实现按 runId 判定，而 runId 每刷新
+  // 必换，导致每次刷新误删带 childId 的活记录 → 面板读不到 childId → 重 fork
+  // → 会话繁殖（实测 19 个孤儿会话）。这里传当前宿主布局里的 tab id 集合；
+  // 拿不到布局面则传 undefined（sweep 自身 fail-open，一律不清）。
+  sweepOrphanedSideChatMeta(readLiveTabIds())
   // 回流 store 两个模块共享：sidechat 生产（回流按钮），annotate 消费
   // （chip + 发送拦截器序列化）。
   const reflow = createReflowStore()

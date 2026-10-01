@@ -16,15 +16,24 @@ import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import type { Context, ConversationService, SessionFace, SessionInput } from '../host/contracts.ts'
 import { appendDraftText } from './model.ts'
 import { attachFiles, resolveAttachmentApis } from './composer/attach.ts'
+import { ensureRetained } from './retain.ts'
+import { liftArchive } from './archive-gate.ts'
 
 const NOOP_UNSUBSCRIBE = (): void => {}
 
 /**
  * 解析 childId 会话的 input 草稿机；任何一步缺失/抛错返回 null
  * （调用方走降级路径）。
+ *
+ * 0.1.7：`ctx.sessions.scope(id)` 与 `binding(id)` 同属「只在已 retain 的
+ * generation 上可用」的面（Borrow an already-retained Agent-scoped Context）。
+ * 未 retain 时 scope 返回 undefined → input 机器解析失败 → 面板降级为
+ * session.prompt 路径（发送看似成功但子会话未接管，用户视角「发送后没有
+ * 回答」）。故此处先 ensure retain 再取 scope。
  */
 export function resolveSessionInput(ctx: Context, childId: string): SessionInput | null {
   try {
+    ensureRetained(ctx, childId)
     const actx = ctx.sessions.scope(childId)
     if (actx === undefined) return null
     const conversation = ctx.get('conversation') as ConversationService | undefined
@@ -89,10 +98,24 @@ export interface Composer {
  * 快照前缀），供面板捕获首条消息主题为 topic；是否首条的判定归调用方。
  */
 export function useComposer(ctx: Context, session: SessionFace | undefined, childId: string | undefined, options?: { firstSendPrefix?: () => string | null, onSubmitText?: (body: string) => void }): Composer {
-  // 每个 childId 解析一次：机器可用性在会话生命周期内不变。
+  // 0.1.7：input 机器的可用性不再「会话生命周期内不变」——它取决于
+  // ctx.sessions.scope(childId) 能否解析，而该面只在子会话被 retain 后有
+  // 值。首次渲染可能早于 retain 完成（fork 刚落 meta、面板先挂载），
+  // 所以此处做成「会话列表/绑定状态变化时重试解析」的可恢复形态：
+  // 用 list 快照的 revision 作为重试信号（retain 由 ensureRetained 幂等推进，
+  // scope 一旦可解析，下一次渲染即拿到 input）。
+  const listRev = useSyncExternalStore(
+    useCallback((notify: () => void) => ctx.sessions.list.subscribe(notify), [ctx]),
+    () => {
+      const snap = ctx.sessions.list.getSnapshot()
+      // 需要「会话列表已就绪」这一事实作为重试边界：就绪后 binding/scope 才可能有值。
+      return snap.phase === 'ready' ? (snap.byId?.[childId ?? ''] !== undefined ? 2 : 1) : 0
+    },
+  )
   const input = useMemo(
     () => (childId === undefined ? null : resolveSessionInput(ctx, childId)),
-    [ctx, childId],
+    // listRev 参与依赖：子会话进列表（或列表就绪）后强制重解析一次。
+    [ctx, childId, listRev],
   )
 
   const machineState = useSyncExternalStore(
@@ -113,17 +136,19 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
 
   const attachImages = useCallback(
     (files: readonly File[]): boolean => {
-      if (input === null || apis === null) return false
-      return attachFiles(apis, input, files)
+      if (input === null || apis === null || childId === undefined) return false
+      return attachFiles(apis, input, childId, files)
     },
-    [input, apis],
+    [input, apis, childId],
   )
 
   const removeImage = useCallback(
     (id: string): void => {
       if (input === null || apis === null) return
-      input.removeImage(id)
-      apis.releaseDraftImage(id)
+      // 0.1.7：removeAttachment（旧名 removeImage 回退）。
+      if (typeof input.removeAttachment === 'function') input.removeAttachment(id)
+      else input.removeImage?.(id)
+      apis.release(id)
     },
     [input, apis],
   )
@@ -147,6 +172,11 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
   const submit = useCallback((mode?: 'queue' | 'steer'): void => {
     const body = draft.trim()
     if (body === '') return
+    // 0.1.7：发送前解除归档。宿主 ArchivedSessionGate 会拒绝归档会话的每一次
+    // agent/pre-step（轮次以 blocked 结束、零模型请求）——侧边会话若处于归档
+    // 态，消息能进队、有本地回显，但永远等不到回答（实证）。轮次结束后由
+    // SideChatPanel 的 running 翻转 effect 恢复归档（restoreArchive）。
+    if (childId !== undefined) liftArchive(ctx, childId)
     // 内容身份钩子（Delivery_05）：拿到的是不含快照前缀的干净 body。
     options?.onSubmitText?.(body)
     // 首条消息前缀（busy fork 的进展快照）：发送瞬间现取现拼。
@@ -174,7 +204,7 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
       setLocalDraft(d => (d === '' ? text : d))
       setSendError(error instanceof Error ? error.message : '发送失败')
     })
-  }, [draft, input, session, options])
+  }, [draft, input, session, options, childId, ctx])
 
   return {
     machine: input !== null,
@@ -185,12 +215,13 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
     submit,
     phase: machineState?.phase,
     draftRev: machineState?.draftRev,
-    imageIds: machineState?.imageIds ?? [],
+    // 0.1.7：InputState 的字段名从 imageIds 改为 attachmentIds（旧名回退）。
+    imageIds: attachmentIdsOf(machineState),
     imagePreviews: (() => {
-      const ids = machineState?.imageIds ?? []
+      const ids = attachmentIdsOf(machineState)
       if (ids.length === 0 || apis === null) return []
       try {
-        return apis.draftImages(ids).map(i => ({ id: i.id, url: i.previewUrl }))
+        return apis.resolve(ids).map(i => ({ id: i.id, url: i.previewUrl ?? '' }))
       } catch {
         return []
       }
@@ -199,4 +230,12 @@ export function useComposer(ctx: Context, session: SessionFace | undefined, chil
     attachImages,
     removeImage,
   }
+}
+
+/** 读输入机器的待发附件 id 列表（0.1.7 attachmentIds 优先，旧名 imageIds 回退）。 */
+function attachmentIdsOf(state: { attachmentIds?: readonly string[]; imageIds?: readonly string[] } | null | undefined): readonly string[] {
+  if (state === null || state === undefined) return []
+  if (Array.isArray(state.attachmentIds)) return state.attachmentIds
+  if (Array.isArray(state.imageIds)) return state.imageIds
+  return []
 }

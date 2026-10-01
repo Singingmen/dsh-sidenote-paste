@@ -25,6 +25,21 @@ import { isTrustedApiRequest } from './trust-fence.ts'
 /** Plugin identity for cordis.yml rows. */
 export const name = 'dsh-sidenote'
 
+// 0.1.7 起 `MessageSourceMap` 不再有共享的 `plugin` catch-all kind（dsh-llm
+// message.d.ts：'there is no shared catch-all plugin kind'），改为每个生产者
+// 在自身模块里 declare module 扩展。本插件声明 `side-chat-reflow` 承载回流
+// 注入（form:'notice' + summary 一并声明，折叠行才能显示摘要）。
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'side-chat-reflow': {
+      kind: 'side-chat-reflow'
+      plugin: string
+      form: 'notice'
+      summary: string
+    }
+  }
+}
+
 // ── 宿主面镜像（结构性子集；权威：dsh-better-sidebar src/context-types.ts） ────
 
 interface HttpRequestLike {
@@ -139,7 +154,7 @@ export function makeReflowHandler(ctx: HostContext) {
         agent.inject(createUserMessage({
           content: [{ type: 'text', text: item.text as string }],
           source: {
-            kind: 'plugin',
+            kind: 'side-chat-reflow',
             plugin: 'dsh-sidenote',
             // form:'notice' + summary：折叠行直接显示回流摘要（不声明则 opaque
             // 渲染、折叠行只显示原始 plugin 串——审查 M2）。

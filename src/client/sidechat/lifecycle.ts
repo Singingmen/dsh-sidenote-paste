@@ -11,6 +11,8 @@ import { parseSideChatMeta, type SideChatMeta } from './model.ts'
 import { readTab, sidebarRightOf } from './open.ts'
 import { betterSidebarOf, directNativeLeg, rootContext } from './native.ts'
 import { readSideChatMeta, writeSideChatMeta } from './metaStore.ts'
+import { ensureRetained } from './retain.ts'
+import { registerSideSession } from './archive-gate.ts'
 import { sideChatTitleOf } from './identity.ts'
 import { contentTextOf } from '../chat/transcript.ts'
 import { SNAPSHOT_BLOCK_MARK } from './snapshot.ts'
@@ -372,6 +374,9 @@ export async function forkAndRegister(ctx: Context, parentSessionId: string, tab
   // meta 先行：fork resolve 后立即登记 childId（会话切换导致组件卸载时
   // updateTab 找不到 tab 也只是 no-op——否则 Tab 永远停在 forking 且下次
   // 挂载重复 fork 出孤儿会话）。
+  // 0.1.7：binding 只对已 retain 的会话返回——fork 出的子会话必须立刻 retain，
+  // 否则面板相位卡 loading（「正在准备侧边聊天…」）。
+  ensureRetained(owner, forked)
   updateTabMeta(ctx, parentSessionId, tabId, (current) => ({
     ...current,
     childId: forked,
@@ -381,12 +386,14 @@ export async function forkAndRegister(ctx: Context, parentSessionId: string, tab
     ...(snapshotOnly ? { snapshotOnly: true } : {}),
     ...(leakedPromptPrefix !== undefined ? { leakedPromptPrefix } : {}),
   }))
-  // 归档失败残留可见（无 unarchive API），不阻断面板。
-  try {
-    await owner.workspaces.archiveSession(forked)
-  } catch (error) {
-    console.warn('[dsh-sidenote] 归档侧边会话失败（会话列表可能短暂可见）:', error)
-  }
+  // 0.1.7：**不在 fork 后立刻归档**。宿主新增 ArchivedSessionGate
+  // （dsh-api-session-controller L2422）：归档会话的每一次 agent/pre-step 都
+  // 被 `{kind:'reject'}` 拒绝，轮次以 blocked 结束、零模型请求——用户视角
+  // 「发送成功但永远没回答」（实证）。
+  // 但也不能就此不管：登记进 owned 后，由「轮次结束 / 面板卸载」统一归档，
+  // **未发送过消息的空会话同样会被归档**（否则左侧会话列表持续堆积，实测
+  // 报告为「关闭后还有对话残余」）。完整策略见 archive-gate.ts。
+  registerSideSession(forked)
   // fork 继承 agent preset 但不继承模型选择——读主会话当前模型并同步到
   // 子会话（best-effort，失败则子会话用宿主默认模型，面板标签如实回退）。
   // 双版本链：投影 + remote.session（0.1.5）优先，connection.api（<= 0.1.2

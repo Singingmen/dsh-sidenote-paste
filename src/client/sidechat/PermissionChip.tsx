@@ -7,7 +7,7 @@
  * （默认表 workspace-write/danger-full-access，dsh-permission-presets 实证）。
  */
 import { useMemo, useState, useSyncExternalStore } from 'react'
-import { IconChevronDownOutline14, IconInspectOutline12, Menu, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutlineRegular, IconInspectOutlineRegular, Menu, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SessionFace } from '../host/contracts.ts'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
@@ -69,9 +69,9 @@ export function PermissionChip(props: { session: SessionFace | undefined }) {
           title={t('permChipTitle')}
           onClick={() => { setOpen(!open) }}
         >
-          <IconInspectOutline12 size={12} />
+          <IconInspectOutlineRegular size={12} />
           <span>{presetLabel(effective)}</span>
-          <IconChevronDownOutline14 size={12} />
+          <IconChevronDownOutlineRegular size={12} />
         </button>
       }
       items={items}

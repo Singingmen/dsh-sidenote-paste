@@ -5,7 +5,7 @@
  * （fold.has 区分「未触碰」与「显式收起」）。
  */
 import { useSyncExternalStore } from 'react'
-import { DisclosureRow, IconThinkOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, IconThinkOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { FoldStore } from './viewState.ts'
 import { t } from '../locales.ts'
 import css from '../sidechat/sidechat.module.css'
@@ -29,7 +29,7 @@ export function ReasoningRow(props: { text: string; rowKey: string; fold: FoldSt
   return (
     <div className={css.flowRow}>
       <DisclosureRow
-        icon={<IconThinkOutline16 size={14} />}
+        icon={<IconThinkOutlineRegular size={14} />}
         title={t('thinking')}
         open={open}
         expandable

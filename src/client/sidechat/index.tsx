@@ -15,7 +15,7 @@
  * 另安装：annotate 桥（sideChatBridge.current，WI-03 联动缝）与 /side
  * 斜杠命令（spike，popupSelect 形态，不可行时降级为只有 Tab 入口）。
  */
-import { IconNewChatOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconNewChatOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context } from '../host/contracts.ts'
 import { sideChatBridge } from '../bridge.ts'
 import type { ReflowStore } from '../reflow.ts'
@@ -38,8 +38,18 @@ export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
   // 本插件就绪，一次性快照会让旧宿主静默缺席）：两条腿各自等自己的前提服务。
   // - sidebarRightTabs 到（宿主 ≥ 0.1.5）⇒ 直连注册（native-tab.tsx 内 ctx.inject）；
   // - betterSidebar 到且 < 0.19（宿主 ≤ 0.1.2）⇒ legacy 注册。
-  // 互斥：BS ≥ 0.19 时本分支不注册（原生面必在，直连腿接管）；同 kind 双注册
-  // 会被原生注册表判碰撞 throw，本结构天然不冲突。
+  //
+  // ⚠️ 互斥是**必须**的（2026-09-29 实测撞车后回退）：BS ≥ 0.19 时不能也调
+  // `bs.registerTab`。原因不在 `service.ts` 的 `registerTab` 自身（它只写自己的
+  // `tabs` 表），而在 `client/native/index.ts` L186 `registerNativeSurface`：
+  // 它订阅 BS 注册表并把每个 descriptor **转发注册进原生 `sidebarRightTabs`**，
+  // 且 `kind = descriptor.id`（L236）——与直连腿注册的 kind 完全相同，于是
+  // `sidebarRight: tab kind "dsh-sidenote:side" is already registered`。
+  // 又因 `isTabEnabled` 默认 true（`service.ts` L843：`tabsEnabled[id] !== false`），
+  // 新 descriptor 默认即被转发，无法靠「默认关闭」绕开。
+  //
+  // 已知代价（接受）：本插件的 tab 不出现在「设置 → 侧边栏内容」的卡片网格里
+  // （那张网格渲染 `bs.getTabs()`），入口是 `/side` 命令与 + 菜单。
   registerNativeSideChatTab(ctx, reflow)
   ctx.inject(['betterSidebar'], (injected) => {
     const bs = injected.get('betterSidebar') as Context['betterSidebar']
@@ -55,7 +65,7 @@ export function registerSideChat(ctx: Context, reflow: ReflowStore): void {
       () => bs.registerTab({
         id: SIDE_TAB_TYPE,
         title: () => t('menuTitle'),
-        icon: (size: number) => <IconNewChatOutline16 size={size} />,
+        icon: (size: number) => <IconNewChatOutlineRegular size={size} />,
         order: 60,
         available: (availableCtx, scope) => canForkFrom(availableCtx, scope.sessionId),
         createTab: (state) => {

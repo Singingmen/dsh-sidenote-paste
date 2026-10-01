@@ -11,6 +11,7 @@ export const LOCALE_NS = 'dsh-sidenote'
 /** 英文词典（key 的权威清单）。 */
 export const en = {
   menuTitle: 'Side chat',
+  tabDescription: 'Fork this session into a side panel; supports image attachments',
   tabBaseTitle: 'Side',
 
   // SideChatPanel
@@ -148,14 +149,20 @@ export const en = {
   reflowRemoveTitle: 'Remove reflow',
 
   // TerminalBlock labels（0.1.2 运行时不传 labels 会崩——W00 排障实证）
+  // 0.1.7：TerminalBlockLabels 新增 noExitCode；Diff/ReadBlockLabels 继承
+  // CodeToolbarLabels（codeLabel/wrapLabel/unwrapLabel）——缺字段即类型报错。
   termSignal: 'Terminated ({signal})',
   termExitCode: 'Exit code {code}',
+  termNoExitCode: 'ended without an exit code',
   termDone: 'done',
   termNoOutput: '(no output)',
   termCollapse: 'Collapse',
   termCollapseAria: 'Collapse the output',
   termExpand: 'Show all ({n} hidden lines)',
   termExpandAria: 'Show all ({n} hidden lines)',
+  codeLabel: 'Code',
+  wrapLabel: 'Wrap lines',
+  unwrapLabel: 'No wrap',
 
   // D1 父历史折叠卡
   inheritedLabel: 'Inherited from main session · up to the fork point · {n}',
@@ -169,6 +176,17 @@ export const en = {
   reflowAll: 'Reflow all',
   reflowAllTitle: 'Bring all Q&A pairs back to the main session',
   reflowAllDone: 'Reflowed ✓',
+  // 选择性回流（P2）：勾选要带走的问答对。
+  reflowSelect: 'Select',
+  reflowSelectTitle: 'Pick which Q&A pairs to bring back to the main session',
+  reflowSelected: 'Reflow selected ({n})',
+  reflowSelectedDone: 'Reflowed ✓',
+  reflowSelectAll: 'All',
+  reflowSelectNone: 'None',
+  reflowSelectHint: 'Tick the pairs to bring back, then Reflow selected',
+  copyMessage: 'Copy',
+  copyMessageDone: 'Copied',
+  copyMessageTitle: 'Copy this message',
   promote: 'Save as session',
   promoteTitle: 'Fork this side chat into a standalone session in the main list',
   promoteDone: 'Saved as a regular session — it\'s open in the main view now',
@@ -195,6 +213,7 @@ export type CopyKey = keyof typeof en
 /** 中文词典（与 en 同 key）。 */
 export const zh: Record<CopyKey, string> = {
   menuTitle: '侧边聊天',
+  tabDescription: '把当前会话 fork 到侧边面板；支持图片附件',
   tabBaseTitle: '侧边',
 
   codeCopy: '复制',
@@ -323,12 +342,16 @@ export const zh: Record<CopyKey, string> = {
 
   termSignal: '已终止（{signal}）',
   termExitCode: '退出码 {code}',
+  termNoExitCode: '无退出码结束',
   termDone: '完成',
   termNoOutput: '（无输出）',
   termCollapse: '收起',
   termCollapseAria: '收起输出',
   termExpand: '展开全部（隐藏 {n} 行）',
   termExpandAria: '展开全部（隐藏 {n} 行）',
+  codeLabel: '代码',
+  wrapLabel: '自动换行',
+  unwrapLabel: '不换行',
 
   inheritedLabel: '继承自主会话 · 截至 fork 点 · {n} 条',
   snapshotLabel: '主线进展快照',
@@ -340,6 +363,17 @@ export const zh: Record<CopyKey, string> = {
   reflowAll: '整段回流',
   reflowAllTitle: '把该侧聊全部问答对带回主会话（chip 可预览/逐条撤）',
   reflowAllDone: '已回流 ✓',
+  // 选择性回流（P2）：勾选要带走的问答对。
+  reflowSelect: '挑选',
+  reflowSelectTitle: '勾选要带回主会话的问答对',
+  reflowSelected: '回流选中（{n}）',
+  reflowSelectedDone: '已回流 ✓',
+  reflowSelectAll: '全选',
+  reflowSelectNone: '全不选',
+  reflowSelectHint: '勾选要带走的问答对，再点「回流选中」',
+  copyMessage: '复制',
+  copyMessageDone: '已复制',
+  copyMessageTitle: '复制这条消息',
   promote: '保存为正式会话',
   promoteTitle: '把侧边聊天转为会话列表里的正式会话',
   promoteDone: '已保存为正式会话——已在主视图打开',

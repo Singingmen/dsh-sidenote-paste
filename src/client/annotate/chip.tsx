@@ -10,7 +10,7 @@
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
-import { IconCloseOutline16, IconListPenOutline16, IconShareOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCloseOutlineRegular, IconListPenOutlineRegular, IconShareOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InputZone } from '../host/contracts.ts'
 import type { AnnotationStore } from './model.ts'
 import type { ReflowStore } from '../reflow.ts'
@@ -75,7 +75,7 @@ export function createAnnotationChip(store: AnnotationStore) {
           aria-expanded={expanded}
           onClick={() => { setExpanded(open => !open) }}
         >
-          <IconListPenOutline16 size={12} />
+          <IconListPenOutlineRegular size={12} />
           <span>{t(active.length === 1 ? 'chipOne' : 'chipMany', { n: active.length })}</span>
         </button>
         {expanded && (
@@ -94,7 +94,7 @@ export function createAnnotationChip(store: AnnotationStore) {
                   aria-label={t('removeAria', { n: annotation.number })}
                   onClick={() => { store.remove(annotation.id) }}
                 >
-                  <IconCloseOutline16 size={12} />
+                  <IconCloseOutlineRegular size={12} />
                 </button>
               </li>
             ))}
@@ -170,7 +170,7 @@ export function createReflowChip(reflow: ReflowStore) {
           aria-expanded={expanded}
           onClick={() => { setExpanded(open => !open) }}
         >
-          <IconShareOutline16 size={12} />
+          <IconShareOutlineRegular size={12} />
           <span>{t(items.length === 1 ? 'reflowChipOne' : 'reflowChipMany', { n: items.length })}</span>
         </button>
         {expanded && (
@@ -187,7 +187,7 @@ export function createReflowChip(reflow: ReflowStore) {
                   aria-label={t('reflowRemoveTitle')}
                   onClick={() => { reflow.remove(item.id) }}
                 >
-                  <IconCloseOutline16 size={12} />
+                  <IconCloseOutlineRegular size={12} />
                 </button>
               </li>
             ))}

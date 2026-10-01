@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Component } from 'react'
 import type { ReactNode } from 'react'
-import { IconCheckOutline16, IconTrashOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCheckOutlineRegular, IconTrashOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context } from '../host/contracts.ts'
 import { sideChatBridge } from '../bridge.ts'
 import { t } from '../locales.ts'
@@ -399,7 +399,7 @@ function SideChatNoteEditor(props: {
           aria-label={t('confirmAskAria')}
           onClick={save}
         >
-          <IconCheckOutline16 size={14} />
+          <IconCheckOutlineRegular size={14} />
         </button>
       </div>
       {failed && <div className={css.editorError}>{t('openSideFailed')}</div>}
@@ -608,7 +608,7 @@ function AnnotationEditor(props: {
           aria-label={t('saveNoteAria')}
           onClick={save}
         >
-          <IconCheckOutline16 size={14} />
+          <IconCheckOutlineRegular size={14} />
         </button>
       </div>
     )
@@ -639,7 +639,7 @@ function AnnotationEditor(props: {
           aria-label={t('deleteNote')}
           onClick={props.onDelete}
         >
-          <IconTrashOutline16 size={14} />
+          <IconTrashOutlineRegular size={14} />
         </button>
         <span className={css.editorSpacer} />
         <button type="button" className={css.cancelButton} onClick={props.onCancel}>{t('cancel')}</button>

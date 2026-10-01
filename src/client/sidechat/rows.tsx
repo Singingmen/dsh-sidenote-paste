@@ -4,7 +4,7 @@
  * 面板壳只留编排）。渲染规则：MessageRow 全族 memo（字段值比较器）。
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { DisclosureRow, IconBranchOutline16, IconCheckOutline16, IconNewChatOutline16, IconShareOutline16, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, IconBranchOutlineRegular, IconCheckOutlineRegular, IconCopyOutlineRegular, IconNewChatOutlineRegular, IconShareOutlineRegular, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatMessage } from '../chat/transcript.ts'
 import { partitionInherited } from '../chat/transcript.ts'
 import { ToolCard } from '../chat/ToolCard.tsx'
@@ -16,6 +16,7 @@ import { SNAPSHOT_BLOCK_MARK } from './snapshot.ts'
 import { markdownTextProps } from '../host/markdown.ts'
 import type { ReflowStore } from '../reflow.ts'
 import { pairQuestions } from './model.ts'
+import { MessageImages, type ImageLoader } from './message-images.tsx'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
 import css from './sidechat.module.css'
@@ -25,7 +26,7 @@ export function EmptyState() {
   useLocaleTick()
   return (
     <div className={css.empty}>
-      <div className={css.emptyIcon}><IconNewChatOutline16 size={32} /></div>
+      <div className={css.emptyIcon}><IconNewChatOutlineRegular size={32} /></div>
       <div className={css.emptyTitle}>{t('emptyTitle')}</div>
       <div className={css.emptyText}>{t('emptyText')}</div>
     </div>
@@ -37,7 +38,7 @@ export function StateScreen(props: { title: string; detail?: string; hint?: stri
   useLocaleTick()
   return (
     <div className={css.stateScreen}>
-      <div className={css.emptyIcon}><IconNewChatOutline16 size={32} /></div>
+      <div className={css.emptyIcon}><IconNewChatOutlineRegular size={32} /></div>
       <div className={css.emptyTitle}>{props.title}</div>
       {props.detail !== undefined && props.detail !== '' && <div className={css.stateDetail}>{props.detail}</div>}
       {props.hint !== undefined && props.hint !== '' && <div className={css.emptyText}>{props.hint}</div>}
@@ -68,7 +69,7 @@ function SnapshotCard({ takenAt, text, fold }: { takenAt: string | null; text: s
   return (
     <div className={css.flowRow}>
       <DisclosureRow
-        icon={<IconBranchOutline16 size={14} />}
+        icon={<IconBranchOutlineRegular size={14} />}
         title={takenAt !== null ? t('snapshotLabelAt', { at: takenAt }) : t('snapshotLabel')}
         open={open}
         expandable
@@ -82,7 +83,7 @@ function SnapshotCard({ takenAt, text, fold }: { takenAt: string | null; text: s
   )
 }
 
-export function MessageList({ messages, fold, boundarySeq, reflow, parentSessionId, sideTitle, onPromote }: {
+export function MessageList({ messages, fold, boundarySeq, reflow, parentSessionId, sideTitle, onPromote, imageLoader }: {
   messages: readonly ChatMessage[]
   fold: FoldStore
   boundarySeq: number | undefined
@@ -90,6 +91,8 @@ export function MessageList({ messages, fold, boundarySeq, reflow, parentSession
   parentSessionId: string | undefined
   sideTitle: string
   onPromote: () => void
+  /** 会话授权图片加载器（用户消息的缩略图用；缺席退化为占位文本）。 */
+  imageLoader: ImageLoader | null
 }) {
   const [reflowAllDone, setReflowAllDone] = useState(false)
   // 问答成对：每条 assistant 消息配对它在回答的用户提问（回流时带上）。
@@ -106,12 +109,31 @@ export function MessageList({ messages, fold, boundarySeq, reflow, parentSession
     const split = splitSnapshotPrefix(first.text)
     return split === null ? null : { key: first.key, ...split }
   }, [fresh])
+  // P2 选择性回流：挑选模式下逐条勾选，只把选中的问答对带回去。
+  // 默认勾选全部可回流项（与「整段回流」等价起点，用户再取消不要的）。
+  // 声明在 renderRow 之前——renderRow 的闭包要读它们。
+  const [selectMode, setSelectMode] = useState(false)
+  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set<string>())
+  // 可回流项（与「整段回流」同一判据：非空、非流式的 assistant 消息）。
+  const reflowable = useMemo(
+    () => messages.filter(m => m.role === 'assistant' && m.text !== '' && m.streaming !== true),
+    [messages],
+  )
+  const togglePick = useCallback((key: string) => {
+    setPicked(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+
   const renderRow = (message: ChatMessage) => {
     const m = snapshotInfo !== null && message.key === snapshotInfo.key
       ? { ...message, text: snapshotInfo.rest }
       : message
     return (
-      <MessageRow key={m.key} message={m} question={questions.get(m.key)} fold={fold} reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} />
+      <MessageRow key={m.key} message={m} question={questions.get(m.key)} fold={fold} reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} imageLoader={imageLoader} selectMode={selectMode} checked={picked.has(m.key)} onToggleCheck={togglePick} />
     )
   }
   // P1-4 密度管理：≥2 个可折叠项时出现「全部折叠/展开」开关（FoldCard/工具卡/
@@ -127,38 +149,99 @@ export function MessageList({ messages, fold, boundarySeq, reflow, parentSession
   }, [messages, inherited.length])
   useSyncExternalStore(useCallback((fn: () => void) => fold.subscribe(fn), [fold]), () => fold.getSnapshot())
   const anyOpen = foldableKeys.some(k => fold.isOpen(k))
+
+  const enterSelect = useCallback(() => {
+    setPicked(new Set(reflowable.map(m => m.key)))
+    setSelectMode(true)
+    setReflowAllDone(false)
+  }, [reflowable])
+
   return (
     <div className={css.transcript}>
       {(foldableKeys.length >= 2 || (parentSessionId !== undefined && messages.length > 0)) && (
         <div className={css.densityRow}>
           {parentSessionId !== undefined && messages.length > 0 && (
             <span className={css.actionGroup}>
-              <button
-                type="button"
-                className={css.densityToggle}
-                title={t('reflowAllTitle')}
-                onClick={() => {
-                  // D4 整段带走：所有问答成对逐条入回流 store（受控对象，
-                  // 主输入框 chip 可预览/逐条撤；骨架=问答对，禁全量快照回灌）。
-                  let added = 0
-                  for (const m of messages) {
-                    if (m.role !== 'assistant' || m.text === '' || m.streaming === true) continue
-                    reflow.add(parentSessionId, sideTitle, m.text, questions.get(m.key))
-                    added += 1
-                  }
-                  if (added > 0) setReflowAllDone(true)
-                }}
-              >
-                {reflowAllDone ? t('reflowAllDone') : t('reflowAll')}
-              </button>
-              <button
-                type="button"
-                className={css.densityToggle}
-                title={t('promoteTitle')}
-                onClick={onPromote}
-              >
-                {t('promote')}
-              </button>
+              {selectMode ? (
+                <>
+                  <button
+                    type="button"
+                    className={css.densityToggle}
+                    onClick={() => {
+                      // 只带走勾选的问答对。
+                      let added = 0
+                      for (const m of reflowable) {
+                        if (!picked.has(m.key)) continue
+                        reflow.add(parentSessionId, sideTitle, m.text, questions.get(m.key))
+                        added += 1
+                      }
+                      if (added > 0) {
+                        setReflowAllDone(true)
+                        setSelectMode(false)
+                      }
+                    }}
+                  >
+                    {reflowAllDone ? t('reflowSelectedDone') : t('reflowSelected', { n: picked.size })}
+                  </button>
+                  <button
+                    type="button"
+                    className={css.densityToggle}
+                    onClick={() => { setPicked(new Set(reflowable.map(m => m.key))) }}
+                  >
+                    {t('reflowSelectAll')}
+                  </button>
+                  <button
+                    type="button"
+                    className={css.densityToggle}
+                    onClick={() => { setPicked(new Set()) }}
+                  >
+                    {t('reflowSelectNone')}
+                  </button>
+                  <button
+                    type="button"
+                    className={css.densityToggle}
+                    onClick={() => { setSelectMode(false) }}
+                  >
+                    {t('cancel')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className={css.densityToggle}
+                    title={t('reflowAllTitle')}
+                    onClick={() => {
+                      // D4 整段带走：所有问答成对逐条入回流 store（受控对象，
+                      // 主输入框 chip 可预览/逐条撤；骨架=问答对，禁全量快照回灌）。
+                      let added = 0
+                      for (const m of reflowable) {
+                        reflow.add(parentSessionId, sideTitle, m.text, questions.get(m.key))
+                        added += 1
+                      }
+                      if (added > 0) setReflowAllDone(true)
+                    }}
+                  >
+                    {reflowAllDone ? t('reflowAllDone') : t('reflowAll')}
+                  </button>
+                  <button
+                    type="button"
+                    className={css.densityToggle}
+                    title={t('reflowSelectTitle')}
+                    onClick={enterSelect}
+                  >
+                    {t('reflowSelect')}
+                  </button>
+                  <button
+                    type="button"
+                    className={css.densityToggle}
+                    title={t('promoteTitle')}
+                    onClick={onPromote}
+                  >
+                    {t('promote')}
+                  </button>
+                </>
+              )}
             </span>
           )}
           {foldableKeys.length >= 2 && (
@@ -210,24 +293,95 @@ function ReflowButton({ reflow, parentSessionId, sideTitle, text, question }: {
         timer.current = window.setTimeout(() => { setDone(false) }, 1600)
       }}
     >
-      {done ? <IconCheckOutline16 size={12} /> : <IconShareOutline16 size={12} />}
+      {done ? <IconCheckOutlineRegular size={12} /> : <IconShareOutlineRegular size={12} />}
     </button>
   )
+}
+
+/**
+ * 消息复制按钮（P2）：悬停行内出现，一键把该条消息的纯文本写进剪贴板。
+ *
+ * 面板此前没有任何复制入口（rows.tsx/SideChatPanel.tsx 里 `copy` 零命中），
+ * 用户只能手动划选——长结论尤其难选全。
+ *
+ * 剪贴板降级链：`navigator.clipboard.writeText`（需安全上下文）→ 临时
+ * textarea + `document.execCommand('copy')`（http/localhost 或权限被拒时
+ * 仍可用）。两者都失败则静默（不弹错，不打断阅读）。
+ */
+function CopyButton({ text }: { text: string }) {
+  useLocaleTick()
+  const [done, setDone] = useState(false)
+  const timer = useRef(0)
+  useEffect(() => () => { window.clearTimeout(timer.current) }, [])
+  if (text === '') return null
+  return (
+    <button
+      type="button"
+      className={css.copyButton}
+      title={done ? t('copyMessageDone') : t('copyMessageTitle')}
+      aria-label={t('copyMessageTitle')}
+      onClick={() => {
+        void copyText(text).then((ok) => {
+          if (!ok) return
+          setDone(true)
+          window.clearTimeout(timer.current)
+          timer.current = window.setTimeout(() => { setDone(false) }, 1600)
+        })
+      }}
+    >
+      {done ? <IconCheckOutlineRegular size={12} /> : <IconCopyOutlineRegular size={12} />}
+    </button>
+  )
+}
+
+/** 写剪贴板（带 execCommand 回退）；返回是否成功。 */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText !== undefined) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // 权限被拒 / 非安全上下文 → 落回退路径。
+  }
+  try {
+    const holder = document.createElement('textarea')
+    holder.value = text
+    holder.setAttribute('readonly', '')
+    holder.style.position = 'fixed'
+    holder.style.opacity = '0'
+    document.body.appendChild(holder)
+    holder.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(holder)
+    return ok
+  } catch {
+    return false
+  }
 }
 
 // MessageRow 全族 memo（C-5 性能纪律）：transcriptOf 每次快照重建消息对象
 // （引用必变），比较器按字段值比；store 与回调引用稳定（fold/reflow 单例）。
 // 流式增长时只重渲变化的行（长 fork 历史的帧成本随列表长度摊平）。
 interface MessageRowProps {
+
   message: ChatMessage
   question?: string
   fold: FoldStore
   reflow: ReflowStore
   parentSessionId: string | undefined
   sideTitle: string
+  /** 会话授权图片加载器（resolveImageLoader 的结果；缺席退化为占位文本）。 */
+  imageLoader: ImageLoader | null
+  /** 挑选模式开启时，assistant 行前显示勾选框（P2  selective reflow）。 */
+  selectMode?: boolean
+  /** 该行是否被勾选（selectMode 下有效）。 */
+  checked?: boolean
+  /** 勾选状态变更（selectMode 下有效）。 */
+  onToggleCheck?: (key: string) => void
 }
 
-const MessageRow = memo(function MessageRow({ message, question, fold, reflow, parentSessionId, sideTitle }: MessageRowProps) {
+const MessageRow = memo(function MessageRow({ message, question, fold, reflow, parentSessionId, sideTitle, imageLoader, selectMode, checked, onToggleCheck }: MessageRowProps) {
   useLocaleTick()
   switch (message.role) {
     case 'user': {
@@ -257,15 +411,35 @@ const MessageRow = memo(function MessageRow({ message, question, fold, reflow, p
       }
       return (
         <div className={css.userRow}>
-          <div className={css.userBubble}>{message.text}</div>
+          <div className={css.userBubble}>
+            {message.images !== undefined && message.images.length > 0 && (
+              <MessageImages images={message.images} loader={imageLoader} />
+            )}
+            {message.text}
+          </div>
+          {message.text !== '' && (
+            <div className={css.userActions}>
+              <CopyButton text={message.text} />
+            </div>
+          )}
         </div>
       )
     }
     case 'assistant':
       return (
         <div className={css.assistantRow}>
+          {selectMode === true && (
+            <label className={css.selectBox} title={t('reflowSelectHint')}>
+              <input
+                type="checkbox"
+                checked={checked === true}
+                onChange={() => { onToggleCheck?.(message.key) }}
+              />
+            </label>
+          )}
           {message.text !== '' && message.streaming !== true && (
             <div className={css.rowActions}>
+              <CopyButton text={message.text} />
               <ReflowButton reflow={reflow} parentSessionId={parentSessionId} sideTitle={sideTitle} text={message.text} question={question} />
             </div>
           )}
@@ -321,6 +495,8 @@ function rowPropsEqual(prev: MessageRowProps, next: MessageRowProps): boolean {
   if (prev.fold !== next.fold || prev.reflow !== next.reflow) return false
   if (prev.parentSessionId !== next.parentSessionId || prev.sideTitle !== next.sideTitle) return false
   if (prev.question !== next.question) return false
+  if (prev.selectMode !== next.selectMode || prev.checked !== next.checked) return false
+  if (prev.imageLoader !== next.imageLoader || prev.onToggleCheck !== next.onToggleCheck) return false
   const a = prev.message
   const b = next.message
   return a === b || (
@@ -328,5 +504,6 @@ function rowPropsEqual(prev: MessageRowProps, next: MessageRowProps): boolean {
     && a.reasoning === b.reasoning && a.streaming === b.streaming
     && a.isError === b.isError && a.interrupted === b.interrupted
     && a.toolName === b.toolName && a.card === b.card && a.seq === b.seq
+    && a.images === b.images
   )
 }

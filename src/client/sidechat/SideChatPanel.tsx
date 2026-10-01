@@ -13,16 +13,20 @@
  * 否则消息流永远为空（client-runtime 只为 staged 会话开窗的已知偏差）。
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { IconNewChatOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconNewChatOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context, SessionFace, TabComponentProps } from '../host/contracts.ts'
 import { useComposer, type Composer } from './composer.ts'
 import { appendDraftText, clearPendingDraft, parseSideChatMeta, phaseOf } from './model.ts'
+import { readSideChatMeta, sideChatMetaStore } from './metaStore.ts'
+import { ensureRetained, releaseRetained } from './retain.ts'
+import { restoreArchive } from './archive-gate.ts'
+import { resolveImageLoader } from './message-images.tsx'
 import { transcriptOf } from '../chat/transcript.ts'
 import { EmptyState, MessageList, StateScreen } from './rows.tsx'
 import { armInheritedTurnPurge, chatSourceOf, closeSideTab, ensurePanelOpen, forkAndRegister, openSessionWindow, readModelName, setSideChatTopic, updateTabMeta } from './lifecycle.ts'
 import { topicOf } from './identity.ts'
 import { buildMainlineSnapshot } from './snapshot.ts'
-import { directNativeLeg, registerLiveSideChat } from './native.ts'
+import { directNativeLeg, registerLiveSideChat, rootContext } from './native.ts'
 import { dropClosedSideChat, recordClosedSideChat } from './recentClosed.ts'
 import { ToolCard } from '../chat/ToolCard.tsx'
 import { ComposerBar } from './ComposerBar.tsx'
@@ -46,10 +50,27 @@ const WRITE_TOOLS = new Set(['edit', 'write', 'str-replace-editor', 'str_replace
 /** 首次写提示的一次性 localStorage 键。 */
 const WRITE_NOTICE_KEY = 'dsh-sidenote:write-notice:v1'
 
+/**
+ * 已用掉「绑定丢失自愈」额度的 tab（模块级：跨面板重挂载保持）。
+ * 0.1.7 起自愈每张 tab 仅一次——见组件内该守卫的注释（繁殖事故防线）。
+ */
+const healedTabs = new Set<string>()
+
 export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }) {
   useLocaleTick()
-  const { ctx, scope, tab, visible } = props
-  const meta = parseSideChatMeta(tab.meta)
+  const { scope, tab, visible } = props
+  // 0.1.7：面板从 slot 收到的 ctx 是「收缩面」（inject 清单窄于插件根 ctx），
+  // 拿不到 sessions.scope()/retain() 等宿主调用——附件与发送链路会整体降级
+  // （composer 的 input 机器解析失败 → 无附件 rail、发送后无回答，实证）。
+  // 统一改用插件根 ctx（apply 时经 setRootContext 登记），与 native.ts 的
+  // 「host calls go through the root context」纪律一致。
+  const ctx = rootContext(props.ctx)
+  // meta 数据源（0.1.7 修复）：native 腿（directLeg）下 fork/归档等编排把
+  // childId 写进 metaStore，而 props.tab.meta 是宿主侧的一次性快照——只读
+  // props 会让面板永远停在 forking（「正在准备侧边聊天」卡死实证）。
+  // 故此处订阅 metaStore 并按 tab.id 取记录，props 仅作 legacy 腿的回退源。
+  const storedMeta = useSyncExternalStore(sideChatMetaStore.subscribe, sideChatMetaStore.getSnapshot)
+  const meta = readSideChatMeta(scope.sessionId, tab.id) ?? parseSideChatMeta(tab.meta)
   const childId = meta.childId
   const [forkError, setForkError] = useState<string | null>(null)
   const forkStarted = useRef(false)
@@ -57,13 +78,23 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
   // 绑定丢失自愈（审查 M-2）：meta 记录被清（多窗口清扫/HMR/occurrence
   // 替换）时 childId 从有到无——重置 fork 守卫允许重 fork，而不是永久卡
   // 在 forking（子会话可能仍在盘，重 fork 是开销而非错误）。
+  //
+  // 0.1.7 收紧：自愈**每张 tab 只允许一次**。会话列表卫生改为「轮次后恢复
+  // 归档」后，被归档的子会话在 listed 判定上会抖动，若自愈可无限重入就会
+  // 反复 fork（实测：数分钟内连出 4 个会话的繁殖事故）。故以 tabId 为键
+  // 记一次「已自愈」，二次丢失只报错不再铸造新会话。
   const prevChildId = useRef(childId)
   useEffect(() => {
     if (prevChildId.current !== undefined && childId === undefined) {
-      forkStarted.current = false
+      if (forkStarted.current && !healedTabs.has(tab.id)) {
+        healedTabs.add(tab.id)
+        forkStarted.current = false
+      } else if (healedTabs.has(tab.id)) {
+        setForkError(t('forkErrorTitle'))
+      }
     }
     prevChildId.current = childId
-  }, [childId])
+  }, [childId, tab.id])
 
   // 程序化入口（/side、bridge 划选提问）打开 Tab 时面板可能处于折叠态，
   // 挂载即幂等展开（编排细节在 lifecycle.ts）。
@@ -93,6 +124,12 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
     () => ctx.sessions.list.getSnapshot(),
   )
   const listed = childId !== undefined && listSnap.byId?.[childId] !== undefined
+  // 0.1.7：binding 只对「已 retain」的会话返回（Borrow an already-retained
+  // binding…）。fork 出的子会话从未被 retain，直接 binding 恒为 undefined →
+  // 相位卡 loading。故先 ensure retain 再绑定；retain 在渲染期完成，紧接的
+  // binding 同帧可解析（retain 返回的引用同步可用，history 就绪由 ready 面
+  // 负责，面板订阅 session 快照自身会随 open 推进重渲）。
+  if (childId !== undefined) ensureRetained(ctx, childId)
   const binding = childId === undefined ? undefined : ctx.sessions.binding(childId)
   const session = binding?.session
 
@@ -222,6 +259,36 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
     })
     return () => { cancelled = true }
   }, [ctx, childId, session])
+
+  // ── 归档恢复（0.1.7）：发送前 lift 让宿主 ArchivedSessionGate 放行模型步，
+  // 轮次结束后恢复归档（会话列表卫生）。翻转沿由 running 的真→假定义。 ──
+  const wasRunning = useRef(false)
+  useEffect(() => {
+    if (childId === undefined) return
+    const running = snapshot?.running === true
+    if (running) {
+      wasRunning.current = true
+      return
+    }
+    if (wasRunning.current) {
+      wasRunning.current = false
+      restoreArchive(ctx, childId, { running: false })
+    }
+  }, [ctx, childId, snapshot?.running])
+
+  // 卸载兜底：面板关闭时归档该侧边会话——**包括从未发送过消息的空会话**
+  // （「关闭后左侧列表仍有残余」的修复点：旧实现只归档 lift 过的会话，而
+  // 没发消息的会话从未 lift，于是永远不会被归档）。
+  // running 时跳过（轮次在飞，归档会被宿主拒绝且会打断回复）。
+  const runningRef = useRef(false)
+  runningRef.current = snapshot?.running === true
+  useEffect(() => {
+    if (childId === undefined) return
+    return () => { restoreArchive(ctx, childId, { running: runningRef.current }) }
+  }, [ctx, childId])
+
+  // 用户消息里的图片缩略图：走会话授权的图片加载面（缺席则退化为占位文本）。
+  const imageLoader = useMemo(() => resolveImageLoader(ctx, childId), [ctx, childId])
 
   // ── 桥接草稿移交：meta.pendingDraft → composer 草稿，应用后清除 ──
   const pendingDraft = meta.pendingDraft
@@ -431,7 +498,7 @@ export function SideChatPanel(props: TabComponentProps & { reflow: ReflowStore }
       <div ref={bodyRef} className={css.body} onScroll={onBodyScroll}>
         {messages.length === 0 && !running
           ? <EmptyState />
-          : <MessageList messages={messages} fold={fold} boundarySeq={meta.boundarySeq} reflow={props.reflow} parentSessionId={meta.parentSessionId} sideTitle={tab.title} onPromote={promote} />}
+          : <MessageList messages={messages} fold={fold} boundarySeq={meta.boundarySeq} reflow={props.reflow} parentSessionId={meta.parentSessionId} sideTitle={tab.title} onPromote={promote} imageLoader={imageLoader} />}
         {openFailed && <div className={css.errorRow}>{t('historyFailed')}</div>}
       </div>
       {hasWriteTool && !writeNoticeDismissed && (

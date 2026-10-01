@@ -89,6 +89,9 @@ export interface TabComponentProps {
 export interface TabDescriptor {
   id: string
   title: string | (() => string)
+  /** One-line purpose, shown under the title in the + menu and the settings card
+   *  （权威：dsh-better-sidebar src/client/service.ts 的 TabDescriptor.description）。 */
+  description?: string | (() => string)
   icon?: ReactNode | ((size: number) => ReactNode)
   order?: number
   hidden?: boolean
@@ -392,7 +395,9 @@ export interface InputStateSnapshot {
   readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting'
   /** 单调草稿版本号（斜杠/@ 触发的 pick 时 CAS 用——input/contract.d.ts）。 */
   readonly draftRev?: number
-  /** 待发图片附件 id 列（DraftAttachmentId——附件 rail 用）。 */
+  /** 待发附件 id 列。0.1.7 名为 `attachmentIds`、0.1.5 名为 `imageIds`
+   *  （DraftAttachmentId——附件 rail 用）；消费点双档读取。 */
+  readonly attachmentIds?: readonly string[]
   readonly imageIds?: readonly string[]
   readonly queue?: readonly unknown[]
 }
@@ -514,7 +519,11 @@ export interface SessionInput {
   readonly state: ObservableSnapshot<InputStateSnapshot>
   /** Spike-only mirror; see {@link ReferenceInsert}. Not called by annotate. */
   insertReference(ref: ReferenceInsert, span: TokenSpan): boolean
-  /** 图片附件（WI-02 附件 rail；busy 相位机器拒收返 false）。 */
-  addImages(ids: readonly string[]): boolean
-  removeImage(id: string): void
+  /** 附件（WI-02 附件 rail；busy 相位机器拒收返 false）。0.1.7 名为
+   *  `addAttachments`、0.1.5 名为 `addImages`——消费点运行时双档探测，
+   *  故此处并以可选声明承载。 */
+  addImages?(ids: readonly string[]): boolean
+  addAttachments?(ids: readonly string[]): boolean
+  removeImage?(id: string): void
+  removeAttachment?(id: string): boolean
 }

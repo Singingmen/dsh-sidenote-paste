@@ -7,7 +7,7 @@
  * 同款）；卡片消失由快照驱动（pending 项消失即卸载），UI 不自造状态机。
  */
 import { useState } from 'react'
-import { IconWarningOutline16, IconQuestionOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconWarningOutlineRegular, IconQuestionOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PendingItem, PendingQuestionView } from './pending.ts'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
@@ -34,7 +34,7 @@ function ApprovalCard({ item }: { item: Extract<PendingItem, { kind: 'approval' 
   return (
     <div className={css.pendingCard} data-kind="approval">
       <div className={css.pendingHead}>
-        <IconWarningOutline16 size={14} />
+        <IconWarningOutlineRegular size={14} />
         <span className={css.pendingTitle}>{t('pendingApprovalTitle')}</span>
       </div>
       <div className={css.pendingDesc}>{t('pendingApprovalDesc', { name: item.toolName })}</div>
@@ -94,7 +94,7 @@ function QuestionCard({ item }: { item: PendingQuestionView }) {
   return (
     <div className={css.pendingCard} data-kind="question">
       <div className={css.pendingHead}>
-        <IconQuestionOutline14 size={14} />
+        <IconQuestionOutlineRegular size={14} />
         <span className={css.pendingTitle}>
           {item.planReview ? t('pendingPlanReview') : t('pendingQuestionTitle')}
         </span>

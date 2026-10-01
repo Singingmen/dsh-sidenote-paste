@@ -7,7 +7,7 @@
  * 文案标注「截至 fork 点」——fork 后主对话继续推进，本卡是静态快照。
  */
 import { useSyncExternalStore } from 'react'
-import { DisclosureRow, IconBranchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, IconBranchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { FoldStore } from './viewState.ts'
 import { t } from '../locales.ts'
 import css from '../sidechat/sidechat.module.css'
@@ -18,7 +18,7 @@ export function FoldCard(props: { count: number; rowKey: string; fold: FoldStore
   return (
     <div className={css.flowRow}>
       <DisclosureRow
-        icon={<IconBranchOutline16 size={14} />}
+        icon={<IconBranchOutlineRegular size={14} />}
         title={t('inheritedLabel', { n: props.count })}
         open={open}
         expandable

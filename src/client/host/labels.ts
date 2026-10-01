@@ -9,11 +9,12 @@
 import { t } from '../locales.ts'
 import { markdownChrome } from './markdown.ts'
 
-/** TerminalBlockLabels（0.1.1 与 0.1.2 同形状）。 */
+/** TerminalBlockLabels（0.1.2 与 0.1.7 同形状 + 0.1.7 新增 noExitCode）。 */
 export function terminalLabels() {
   return {
     signal: (signal: string) => t('termSignal', { signal }),
     exitCode: (code: number) => t('termExitCode', { code }),
+    noExitCode: t('termNoExitCode'),
     running: t('running'),
     failed: t('failed'),
     done: t('termDone'),
@@ -27,7 +28,7 @@ export function terminalLabels() {
   }
 }
 
-/** ReadBlockLabels（0.1.2 必填）。 */
+/** ReadBlockLabels（0.1.2 必填；0.1.7 起继承 CodeToolbarLabels）。 */
 export function readLabels() {
   return {
     window: (shown: number, total: number) => t('readWindow', { shown, total }),
@@ -37,6 +38,9 @@ export function readLabels() {
     expandAria: (n: number) => t('termExpandAria', { n }),
     collapse: t('termCollapse'),
     expand: (n: number) => t('termExpand', { n }),
+    codeLabel: t('codeLabel'),
+    wrapLabel: t('wrapLabel'),
+    unwrapLabel: t('unwrapLabel'),
   }
 }
 
@@ -57,7 +61,7 @@ export function searchLabels() {
   }
 }
 
-/** DiffBlockLabels（0.1.2 必填）。 */
+/** DiffBlockLabels（0.1.2 必填；0.1.7 起继承 CodeToolbarLabels）。 */
 export function diffLabels() {
   return {
     copy: t('codeCopy'),
@@ -67,6 +71,9 @@ export function diffLabels() {
     collapse: t('termCollapse'),
     expand: (n: number) => t('termExpand', { n }),
     files: (n: number) => t('diffFiles', { n }),
+    codeLabel: t('codeLabel'),
+    wrapLabel: t('wrapLabel'),
+    unwrapLabel: t('unwrapLabel'),
   }
 }
 

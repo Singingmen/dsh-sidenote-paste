@@ -9,7 +9,7 @@
  */
 import { useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
-import { IconNewChatOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconNewChatOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context } from '../host/contracts.ts'
 import { canForkFrom } from './model.ts'
 import { openOrFocusSideChat } from './open.ts'
@@ -35,7 +35,7 @@ function HeaderSideButton({ ctx }: { ctx: Context }): ReactNode {
       aria-label={t('headerSideTitle')}
       onClick={() => { openOrFocusSideChat(ctx, sessionId) }}
     >
-      <IconNewChatOutline16 size={13} />
+      <IconNewChatOutlineRegular size={13} />
       <span>{t('headerSide')}</span>
     </button>
   )

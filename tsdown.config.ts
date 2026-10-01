@@ -176,5 +176,9 @@ export default [
     dts: false,
     clean: false,
   },
-  clientBundle('dsh-sidenote', 'client.js'),
+  // bundle id 必须与 package.json 的 name 一致：宿主 dsh-client-modules 以
+  // 包名建模块表（graphRow(packageName, …)），client 工厂注册 id 若不一致，
+  // 浏览器 import 包名时查不到工厂 → "import failed (see console)"。
+  // 本包由 dsh-sidenote 0.4.4 fork 改名而来，此处不能沿用旧 id。
+  clientBundle('dsh-sidenote-paste', 'client.js'),
 ] satisfies UserConfig[]

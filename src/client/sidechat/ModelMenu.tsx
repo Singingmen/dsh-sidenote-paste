@@ -7,7 +7,7 @@
  * 懒加载：首次打开才拉目录（catalog RPC 有成本）；切换后本地标签立即更新。
  */
 import { useState } from 'react'
-import { IconCheckOutline16, IconChevronDownOutline14, Menu, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCheckOutlineRegular, IconChevronDownOutlineRegular, Menu, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Context, SessionModelsResult } from '../host/contracts.ts'
 import { listModels, switchModel } from './lifecycle.ts'
 import { t } from '../locales.ts'
@@ -43,7 +43,7 @@ export function ModelMenu(props: {
         items.push({
           id: `${group.id}/${m.id}`,
           label: m.name,
-          ...(selected ? { icon: <IconCheckOutline16 size={12} /> } : {}),
+          ...(selected ? { icon: <IconCheckOutlineRegular size={12} /> } : {}),
         })
       }
     }
@@ -63,7 +63,7 @@ export function ModelMenu(props: {
           onClick={() => { open ? setOpen(false) : openMenu() }}
         >
           <span>{t('modelLabel', { name: props.modelName ?? t('modelFollowsMain') })}</span>
-          <IconChevronDownOutline14 size={12} />
+          <IconChevronDownOutlineRegular size={12} />
         </button>
       }
       items={items}

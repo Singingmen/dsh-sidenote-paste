@@ -14,4 +14,4 @@
 # The frozen legacy leg registers only when better-sidebar >=0.12.0 shows up.
 - insert:
     - id: side-chat
-      name: 'dsh-sidenote'
+      name: 'dsh-sidenote-paste'
