@@ -16,6 +16,7 @@
  */
 import type { Context, ConversationSnapshot } from '../host/contracts.ts'
 import { chatSourceOf } from './lifecycle.ts'
+import { t } from '../locales.ts'
 
 /** 快照里的一拍（当前 turn 的一段内容）。 */
 export interface SnapshotEntry {
@@ -122,6 +123,46 @@ ${body}
 
 /** 协议块标记（WI-03 呈现层据此把快照从气泡提升到继承卡）。 */
 export const SNAPSHOT_BLOCK_MARK = '<mainline-progress-snapshot'
+
+/** 协议块闭合标记。 */
+const SNAPSHOT_BLOCK_CLOSE = '</mainline-progress-snapshot>'
+
+/**
+ * 块头之前允许存在的前导占位长度。
+ *
+ * 块头**未必在文本首位**：`contentTextOf` 把 image 块降级为占位行且**保持原序**，
+ * 故带图发送时文本形如 `[图片]\n<mainline-progress-snapshot …>`（实测消息
+ * `content = ["image","text"]`）。这里只**整行**跳过图片占位的前导行；一旦出现
+ * 任何别的字符即停在原地 —— 宁可漏剥（块明文可见）也绝不误吃用户正文。
+ */
+function snapshotHeadOffset(text: string): number {
+  const placeholder = `${t('imagePlaceholder')}\n`
+  let offset = 0
+  while (text.startsWith(placeholder, offset)) offset += placeholder.length
+  return offset
+}
+
+/**
+ * 剥出首条侧边用户消息里的主线进展快照块（Delivery_04）：快照提升到继承卡
+ * 区域渲染（SnapshotCard），气泡只留用户正文（零污染）。块不完整（缺闭合
+ * 标签）——或块头之前还有非占位正文——一律视为无快照：消息原样渲染，绝不吃文本。
+ *
+ * 纯逻辑（无 React/宿主依赖），与块构建器同处一模块，便于单测直取。
+ */
+export function splitSnapshotPrefix(text: string): { snapshot: string; takenAt: string | null; rest: string } | null {
+  const head = snapshotHeadOffset(text)
+  const body = text.slice(head)
+  if (!body.startsWith(SNAPSHOT_BLOCK_MARK)) return null
+  const close = body.indexOf(SNAPSHOT_BLOCK_CLOSE)
+  if (close < 0) return null
+  const block = body.slice(0, close + SNAPSHOT_BLOCK_CLOSE.length)
+  const takenAt = /taken-at="([^"]*)"/.exec(block)?.[1] ?? null
+  // 气泡正文 = 前导占位（若有）+ 块后正文，两段各自去空白后以换行相接。
+  const rest = [text.slice(0, head).trimEnd(), body.slice(close + SNAPSHOT_BLOCK_CLOSE.length).trimStart()]
+    .filter(part => part !== '')
+    .join('\n')
+  return { snapshot: block, takenAt, rest }
+}
 
 /**
  * 现取主线当前 turn 的进展快照块。无任何在飞内容（主线恰在两轮之间等）

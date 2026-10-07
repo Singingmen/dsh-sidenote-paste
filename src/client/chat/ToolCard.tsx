@@ -7,25 +7,8 @@
  * generic 化渲染（cards.ts 保留全量数据，后续 arm 扩展是加法不是返工）。
  */
 import { useSyncExternalStore, type ReactNode } from 'react'
-import {
-  DisclosureRow,
-  DiffBlock,
-  IconChecklistOutlineRegular,
-  IconCodeOutlineRegular,
-  IconCordisPluginOutlineRegular,
-  IconEditOutlineRegular,
-  IconGlobeOutlineRegular,
-  IconListPenOutlineRegular,
-  IconPlayOutlineRegular,
-  IconRightUpOutlineRegular,
-  IconSearchOutlineRegular,
-  IconTrashOutlineRegular,
-  JsonTree,
-  ReadBlock,
-  SearchBlock,
-  TerminalBlock,
-  WebBlock,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, DiffBlock, JsonTree, ReadBlock, SearchBlock, TerminalBlock, WebBlock } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChecklistOutlineRegular, IconCodeOutlineRegular, IconCordisPluginOutlineRegular, IconEditOutlineRegular, IconGlobeOutlineRegular, IconListPenOutlineRegular, IconPlayOutlineRegular, IconRightUpOutlineRegular, IconSearchOutlineRegular, IconTrashOutlineRegular } from '../host/icons.ts'
 import type { ToolCardModel, ToolCallKind } from './cards.ts'
 import type { FoldStore } from './viewState.ts'
 import { t } from '../locales.ts'

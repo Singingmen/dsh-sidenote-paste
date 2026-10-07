@@ -7,7 +7,7 @@
  * 同款）；卡片消失由快照驱动（pending 项消失即卸载），UI 不自造状态机。
  */
 import { useState } from 'react'
-import { IconWarningOutlineRegular, IconQuestionOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconWarningOutlineRegular, IconQuestionOutlineRegular } from '../host/icons.ts'
 import type { PendingItem, PendingQuestionView } from './pending.ts'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'

@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Component } from 'react'
 import type { ReactNode } from 'react'
-import { IconCheckOutlineRegular, IconTrashOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCheckOutlineRegular, IconTrashOutlineRegular } from '../host/icons.ts'
 import type { Context } from '../host/contracts.ts'
 import { sideChatBridge } from '../bridge.ts'
 import { t } from '../locales.ts'

@@ -259,13 +259,47 @@ export interface ModelCatalogFace {
   readonly failures?: readonly unknown[]
 }
 
+/**
+ * 权限档位目录（authority：`@deepseek-ai/dsh-permission-presets/lib/types/types.d.ts`
+ * 的 `PermissionCatalog` / `PresetOption`）。宿主直接下发**展示名与说明**，
+ * 故客户端不必自建词典即可列出全部档位（含自定义 `presets` 字典的条目）。
+ */
+export interface PermissionCatalogFace {
+  readonly options: readonly {
+    /** 配置的 preset 键、live `auto`、或派生的 `custom`。 */
+    readonly value: string
+    readonly name: string
+    readonly description?: string
+  }[]
+}
+
+/**
+ * Remote permission face：`ctx.remote.permissionPresets.catalog()`（宿主级目录）。
+ * 同样用 `ctx.get` 惰性探测——旧宿主无此服务时返回 undefined，调用点落兜底表。
+ */
+export interface RemotePermissionFace {
+  catalog?: () => Promise<
+    { ok: true; value: PermissionCatalogFace } | { ok: false; error: { code?: string; message?: string } }
+  >
+}
+
 export interface SessionModelsResult {
   current: ModelSelection
   routable: boolean
   groups: readonly {
     id: string
     name: string
-    models: readonly { id: string; name: string; description?: string }[]
+    /**
+     * 型号行。`reasoning` 由宿主下发（authority：`dsh-api-session-controller`
+     * 的 `ModelCatalogModel.reasoning`）——**思考强度档位就挂在这里**，此前
+     * 本地类型漏声明该字段，导致 UI 拿不到档位。
+     */
+    models: readonly {
+      id: string
+      name: string
+      description?: string
+      reasoning?: { efforts: readonly { id: string; name: string; description?: string }[]; defaultEffort?: string }
+    }[]
   }[]
   failures?: readonly unknown[]
 }

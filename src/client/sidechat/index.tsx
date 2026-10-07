@@ -15,7 +15,7 @@
  * 另安装：annotate 桥（sideChatBridge.current，WI-03 联动缝）与 /side
  * 斜杠命令（spike，popupSelect 形态，不可行时降级为只有 Tab 入口）。
  */
-import { IconNewChatOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconNewChatOutlineRegular } from '../host/icons.ts'
 import type { Context } from '../host/contracts.ts'
 import { sideChatBridge } from '../bridge.ts'
 import type { ReflowStore } from '../reflow.ts'

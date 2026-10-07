@@ -4,7 +4,8 @@
  * 面板壳只留编排）。渲染规则：MessageRow 全族 memo（字段值比较器）。
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { DisclosureRow, IconBranchOutlineRegular, IconCheckOutlineRegular, IconCopyOutlineRegular, IconNewChatOutlineRegular, IconShareOutlineRegular, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconBranchOutlineRegular, IconCheckOutlineRegular, IconCopyOutlineRegular, IconNewChatOutlineRegular, IconShareOutlineRegular } from '../host/icons.ts'
 import type { ChatMessage } from '../chat/transcript.ts'
 import { partitionInherited } from '../chat/transcript.ts'
 import { ToolCard } from '../chat/ToolCard.tsx'
@@ -12,7 +13,7 @@ import { ReasoningRow } from '../chat/ReasoningRow.tsx'
 import { FoldCard } from '../chat/FoldCard.tsx'
 import type { FoldStore } from '../chat/viewState.ts'
 import { flattenReflowContent, splitProtocolPrefix } from '../annotate/format.ts'
-import { SNAPSHOT_BLOCK_MARK } from './snapshot.ts'
+import { SNAPSHOT_BLOCK_MARK, splitSnapshotPrefix } from './snapshot.ts'
 import { markdownTextProps } from '../host/markdown.ts'
 import type { ReflowStore } from '../reflow.ts'
 import { pairQuestions } from './model.ts'
@@ -48,18 +49,12 @@ export function StateScreen(props: { title: string; detail?: string; hint?: stri
 
 /**
  * 剥出首条侧边用户消息里的主线进展快照块（Delivery_04）：快照提升到继承卡
- * 区域渲染（SnapshotCard），气泡只留用户正文（零污染）。块不完整（缺闭合
- * 标签）视为无快照——消息原样渲染，绝不吃文本。
+ * 区域渲染（SnapshotCard），气泡只留用户正文（零污染）。
+ *
+ * 实现已移至 `./snapshot.ts`（纯逻辑、无 React/宿主依赖，单测可直取）；
+ * 此处按既有导入面转出，保持调用方与测试的引用稳定。
  */
-export function splitSnapshotPrefix(text: string): { snapshot: string; takenAt: string | null; rest: string } | null {
-  if (!text.startsWith(SNAPSHOT_BLOCK_MARK)) return null
-  const closeMark = '</mainline-progress-snapshot>'
-  const close = text.indexOf(closeMark)
-  if (close < 0) return null
-  const block = text.slice(0, close + closeMark.length)
-  const takenAt = /taken-at="([^"]*)"/.exec(block)?.[1] ?? null
-  return { snapshot: block, takenAt, rest: text.slice(close + closeMark.length).trimStart() }
-}
+export { splitSnapshotPrefix } from './snapshot.ts'
 
 /** 主线进展快照卡：继承卡同族的可展开行（协议块原文，等宽换行）。 */
 function SnapshotCard({ takenAt, text, fold }: { takenAt: string | null; text: string; fold: FoldStore }) {

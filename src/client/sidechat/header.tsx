@@ -9,7 +9,7 @@
  */
 import { useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
-import { IconNewChatOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconNewChatOutlineRegular } from '../host/icons.ts'
 import type { Context } from '../host/contracts.ts'
 import { canForkFrom } from './model.ts'
 import { openOrFocusSideChat } from './open.ts'

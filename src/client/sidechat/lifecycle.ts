@@ -6,7 +6,7 @@
  * off-face 探测纪律：session.open()、store.update 均为运行时可达但契约不
  * 保证的面——就地 feature-check + 吞错降级，并登记进 host/probes.ts。
  */
-import type { Context, ConversationSnapshot, ModelSelection, RemoteSessionModelFace, SessionBinding, SessionFace, SessionModelsResult, UiConversationLike } from '../host/contracts.ts'
+import type { Context, ConversationSnapshot, ModelSelection, PermissionCatalogFace, RemotePermissionFace, RemoteSessionModelFace, SessionBinding, SessionFace, SessionModelsResult, UiConversationLike } from '../host/contracts.ts'
 import { parseSideChatMeta, type SideChatMeta } from './model.ts'
 import { readTab, sidebarRightOf } from './open.ts'
 import { betterSidebarOf, directNativeLeg, rootContext } from './native.ts'
@@ -571,6 +571,34 @@ export async function readModelSelection(ctx: Context, sessionId: string): Promi
 }
 
 /**
+ * 拉宿主权限档位目录（`ctx.remote.permissionPresets.catalog()`）。
+ *
+ * 宿主是档位的唯一权威：`presets` 是可由 config **自定义的字典**（dsh-base 默认
+ * 三档 read-only / workspace-write / danger-full-access），客户端自建清单必然
+ * 落后。旧宿主无此服务时返回 null，由调用点落兜底表。永不抛错。
+ */
+export async function listPermissionPresets(ctx: Context): Promise<PermissionCatalogFace | null> {
+  for (const name of ['remote.permissionPresets', 'remote']) {
+    let candidate: unknown
+    try {
+      candidate = ctx.get(name)
+    } catch {
+      continue // service absent
+    }
+    const ns = candidate as { permissionPresets?: RemotePermissionFace; catalog?: unknown } | undefined
+    const face = typeof ns?.catalog === 'function' ? (ns as RemotePermissionFace) : ns?.permissionPresets
+    if (typeof face?.catalog !== 'function') continue
+    try {
+      const result = await face.catalog()
+      if (result.ok && Array.isArray(result.value?.options) && result.value.options.length > 0) return result.value
+    } catch {
+      // 面在而调用失败 → 继续探测下一候选，最终落兜底表。
+    }
+  }
+  return null
+}
+
+/**
  * 写会话模型选择：`remote.session.selectModel`（新面）优先，旧
  * `connection.api.sessions.selectModel` 回退。面在而调用失败（模型不可路由等）
  * 属真实失败，不再落旧面重试。
@@ -677,8 +705,23 @@ export async function listModels(ctx: Context, sessionId: string): Promise<Sessi
   }
 }
 
-/** 切换子会话模型；成功返回新模型展示名，失败 null（best-effort）。 */
-export async function switchModel(ctx: Context, sessionId: string, provider: string, model: string): Promise<string | null> {
-  const ok = await writeModelSelection(ctx, sessionId, { provider, model })
+/**
+ * 切换子会话模型；成功返回新模型展示名，失败 null（best-effort）。
+ *
+ * @param reasoningEffort - 省略时**不发送**该字段，由宿主取目标模型的
+ *   `defaultEffort`（官方切换行为）；显式给出则按该档位写入。
+ */
+export async function switchModel(
+  ctx: Context,
+  sessionId: string,
+  provider: string,
+  model: string,
+  reasoningEffort?: string,
+): Promise<string | null> {
+  const ok = await writeModelSelection(ctx, sessionId, {
+    provider,
+    model,
+    ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
+  })
   return ok ? model : null
 }

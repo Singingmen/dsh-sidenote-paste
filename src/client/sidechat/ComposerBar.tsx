@@ -3,7 +3,7 @@
  * 附件 rail。自 SideChatPanel.tsx 拆出（WI-02 主战场，面板壳只留编排）。
  */
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
-import { IconPaperclipOutlineRegular, IconSendOutlineRegular, IconStopFillRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconPaperclipOutlineRegular, IconSendOutlineRegular, IconStopFillRegular } from '../host/icons.ts'
 import type { Context, SessionFace } from '../host/contracts.ts'
 import type { Composer } from './composer.ts'
 import { ModelMenu } from './ModelMenu.tsx'
@@ -180,7 +180,7 @@ export function ComposerBar(props: {
           {childIdForMenu !== undefined
             ? (
               <span className={css.composerChips}>
-                <PermissionChip session={session} />
+                <PermissionChip ctx={props.ctx} session={session} />
                 <ModelMenu ctx={props.ctx} sessionId={childIdForMenu} modelName={props.modelName} onSwitched={props.onModelSwitched} />
               </span>
             )

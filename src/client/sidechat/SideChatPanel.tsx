@@ -13,7 +13,7 @@
  * 否则消息流永远为空（client-runtime 只为 staged 会话开窗的已知偏差）。
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { IconNewChatOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconNewChatOutlineRegular } from '../host/icons.ts'
 import type { Context, SessionFace, TabComponentProps } from '../host/contracts.ts'
 import { useComposer, type Composer } from './composer.ts'
 import { appendDraftText, clearPendingDraft, parseSideChatMeta, phaseOf } from './model.ts'

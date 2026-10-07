@@ -3,8 +3,8 @@
  * 序列化、呈现层的块拆分（气泡只留正文、快照提升到继承卡）。
  */
 import { describe, expect, it } from 'vitest'
-import { serializeSnapshot, snapshotEntriesOf, SNAPSHOT_BLOCK_MARK } from '../src/client/sidechat/snapshot.ts'
-import { splitSnapshotPrefix } from '../src/client/sidechat/rows.tsx'
+import { serializeSnapshot, snapshotEntriesOf, splitSnapshotPrefix, SNAPSHOT_BLOCK_MARK } from '../src/client/sidechat/snapshot.ts'
+import { t } from '../src/client/locales.ts'
 
 const userNode = (text: string) => ({ kind: 'user', seq: 1, content: [{ type: 'text', text }] })
 const assistantNode = (reply: string, thinking?: string) => ({
@@ -80,5 +80,43 @@ describe('serializeSnapshot + splitSnapshotPrefix（协议块往返）', () => {
   it('无快照标记 / 块未闭合 → null（消息原样渲染，不吃文本）', () => {
     expect(splitSnapshotPrefix('普通消息')).toBeNull()
     expect(splitSnapshotPrefix(`${SNAPSHOT_BLOCK_MARK} 未闭合的内容`)).toBeNull()
+  })
+})
+
+/**
+ * 回归（2026-10-01 实测泄漏）：侧边首条消息**带图片附件**时，`content` 为
+ * `["image","text"]`，`contentTextOf` 把 image 降级为占位行且保持原序 ⇒ 文本
+ * 形如 `[图片]\n<mainline-progress-snapshot …>`，块头**不在首位**。
+ * 修复前用 `text.startsWith(mark)` 判据 ⇒ 失配返回 null ⇒ 整块明文泄漏进气泡
+ * （用户实测截图）。以下四条钉住修复后的行为契约。
+ */
+describe('splitSnapshotPrefix：带附件的块头偏移（回归）', () => {
+  const blockAt = () => serializeSnapshot(
+    [{ kind: 'request', text: '主线任务' }],
+    new Date(2026, 8, 22, 14, 40),
+  )
+  const ph = () => t('imagePlaceholder')
+
+  it('单个图片占位顶开块头 → 仍剥出；气泡 = 占位 + 用户正文', () => {
+    const block = blockAt()
+    const split = splitSnapshotPrefix(`${ph()}\n${block}\n\n现在几点了`)
+    expect(split).not.toBeNull()
+    expect(split?.snapshot).toBe(block)
+    expect(split?.takenAt).toBe('2026-09-22 14:40')
+    expect(split?.rest).toBe(`${ph()}\n现在几点了`)
+  })
+
+  it('多张图片的前导占位行全部跳过', () => {
+    const block = blockAt()
+    const split = splitSnapshotPrefix(`${ph()}\n${ph()}\n${block}\n\n问题`)
+    expect(split?.rest).toBe(`${ph()}\n${ph()}\n问题`)
+  })
+
+  it('只有图片没有正文 → 气泡只剩占位，不残留协议块', () => {
+    expect(splitSnapshotPrefix(`${ph()}\n${blockAt()}`)?.rest).toBe(ph())
+  })
+
+  it('占位行之后还有用户正文 → 一律不剥（绝不误吃文本）', () => {
+    expect(splitSnapshotPrefix(`${ph()}\n用户先打的字\n${blockAt()}`)).toBeNull()
   })
 })

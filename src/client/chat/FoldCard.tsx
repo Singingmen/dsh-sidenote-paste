@@ -7,7 +7,8 @@
  * 文案标注「截至 fork 点」——fork 后主对话继续推进，本卡是静态快照。
  */
 import { useSyncExternalStore } from 'react'
-import { DisclosureRow, IconBranchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconBranchOutlineRegular } from '../host/icons.ts'
 import type { FoldStore } from './viewState.ts'
 import { t } from '../locales.ts'
 import css from '../sidechat/sidechat.module.css'
