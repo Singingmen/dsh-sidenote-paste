@@ -1,7 +1,7 @@
 {
   "name": "dsh-sidenote-paste",
   "version": "0.4.4",
-  "description": "DSH web plugin: Codex-style side chat (fork the current session into a persistent side panel) + selection annotations with numbered badges and a composer chip. Runs directly on the DSH native right sidebar (DSH ≥ 0.1.5); dsh-better-sidebar is an optional peer for older hosts. / Codex 风格侧边聊天 + 划选注释的 DSH 插件。",
+  "description": "DSH web plugin: Codex-style side chat (fork the current session into a persistent side panel) + selection annotations with numbered badges and a composer chip. Runs directly on the DSH native right sidebar (DSH ≥ 0.2.0-rc.2); dsh-better-sidebar is an optional peer for older hosts. / Codex 风格侧边聊天 + 划选注释的 DSH 插件。",
   "type": "module",
   "license": "MIT",
   "main": "lib/index.js",
@@ -20,7 +20,7 @@
   },
   "engines": {
     "node": ">=20",
-    "dsh": ">=0.1.1-rc.1 <0.2.0"
+    "dsh": "^0.2.0-rc.2 || ^0.2.1-rc.1"
   },
   "dsh": {
     "bundle": {
@@ -41,7 +41,7 @@
       "platform": "web"
     },
     "engines": {
-      "dsh": ">=0.1.1-rc.1 <0.2.0"
+      "dsh": "^0.2.0-rc.2 || ^0.2.1-rc.1"
     }
   },
   "files": [
@@ -64,7 +64,7 @@
     "check:arch": "node scripts/check-arch.mjs"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-client-ui-primitives": ">=0.1.0-rc.6 <0.2.0",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.2.0-rc.2 || ^0.2.1-rc.1",
     "cordis": "^4.0.2",
     "dsh-better-sidebar": ">=0.12.0 <1.0.0",
     "react": "^18.2.0",
@@ -139,7 +139,7 @@
     "name": "dsh-sidenote",
     "repo": "https://github.com/g-yixuan/dsh-sidenote",
     "tag": "v0.4.4",
-    "note": "本地 0.1.7 兼容 fork（包名 dsh-sidenote-paste）。与上游无自动同步；上游修好后两者可并存。"
+    "note": "本地 0.2.x 兼容 fork（包名 dsh-sidenote-paste），声明同时接受 0.2.0-rc.2 与 0.2.1-rc.1（CLI 与桌面端共用一个 link: 实体）。与上游无自动同步；上游修好后两者可并存。"
   },
   "packageManager": "pnpm@11.26.0"
 }
