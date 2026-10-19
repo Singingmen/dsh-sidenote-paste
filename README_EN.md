@@ -1,3 +1,11 @@
+> ### Personal fork of upstream v0.4.4
+>
+> Forked from **[g-yixuan/dsh-sidenote](https://github.com/g-yixuan/dsh-sidenote)** at `v0.4.4`; original author **gyixuan** (MIT; copyright notice preserved in LICENSE).
+> This fork carries `0.1.7`-era compatibility fixes plus small feature additions, and is **verified working on DSH `0.2.1-rc.2`**.
+> Upstream independently implemented similar fixes from `v0.4.5` onward — two parallel implementations, not replacements.
+>
+> 📺 The demo GIF and screenshots below were produced by **upstream author gyixuan** (recorded against `v0.4.4`) and show the upstream build, not this fork.
+
 <p align="center">
   <img src="docs/assets/banner-en.png" alt="dsh-sidenote — side lanes for side questions, notes on any passage" width="100%">
 </p>
