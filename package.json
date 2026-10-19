@@ -125,16 +125,19 @@
     "ai-coding",
     "deepseek"
   ],
-  "homepage": "https://github.com/g-yixuan/dsh-sidenote#readme",
+  "homepage": "https://github.com/Singingmen/dsh-sidenote-paste#readme",
   "repository": {
     "type": "git",
-    "url": "https://local.invalid/dsh-sidenote-paste"
+    "url": "https://github.com/Singingmen/dsh-sidenote-paste"
   },
   "bugs": {
     "url": "https://github.com/g-yixuan/dsh-sidenote/issues",
     "note": "Issues belong to the upstream project; this fork takes no reports."
   },
   "author": "gyixuan",
+  "contributors": [
+    "Singingmen"
+  ],
   "upstream": {
     "name": "dsh-sidenote",
     "repo": "https://github.com/g-yixuan/dsh-sidenote",

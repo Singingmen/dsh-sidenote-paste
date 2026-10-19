@@ -1,3 +1,9 @@
+> ### ⚠️ 个人 fork，非上游官方仓库
+>
+> 本仓库 fork 自 **[g-yixuan/dsh-sidenote](https://github.com/g-yixuan/dsh-sidenote)** 的 `v0.4.4`，原作者 **gyixuan**（MIT 许可，版权声明已保留在 LICENSE）。
+> 本 fork 仅做 DSH `0.1.7` 兼容修复与少量本地功能增补，**日常使用请优先选择上游最新版**。
+> 上游自 `v0.4.5` 起已独立实现同类修复（图标改名、retain 语义、archive 闸门、图片粘贴等）。
+
 <p align="center">
   <img src="docs/assets/banner.png" alt="dsh-sidenote —— 侧边开一岔对话，划选留一条注释，主线永不被打断" width="100%">
 </p>
