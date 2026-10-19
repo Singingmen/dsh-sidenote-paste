@@ -3,6 +3,7 @@
  * 自 sidechat.spec.ts 迁入（WI-00 搬家：tests 镜像 src 结构）。
  */
 import { describe, expect, it } from 'vitest'
+import { t } from '../../src/client/locales.ts'
 import type { ConversationSnapshot } from '../../src/client/host/contracts.ts'
 import {
   contentTextOf,
@@ -34,6 +35,21 @@ describe('contentTextOf', () => {
     expect(contentTextOf(undefined)).toBe('')
     expect(contentTextOf('text')).toBe('')
     expect(contentTextOf([])).toBe('')
+  })
+  it('omitAttachedImages：带 attachment 的图片不追加占位行（缩略图接管）', () => {
+    const content = [
+      { type: 'image', attachment: { attachmentId: 'a1' } },
+      { type: 'text', text: '说明' },
+    ]
+    const placeholder = t('imagePlaceholder')
+    expect(contentTextOf(content, { omitAttachedImages: true })).toBe('说明')
+    // 默认行为不变：其他地方仍保留占位文本（snapshot/lifecycle 依赖原序）
+    expect(contentTextOf(content)).toBe(`${placeholder}\n说明`)
+  })
+  it('omitAttachedImages：attachment 缺席时仍保留占位行（降级不丢信息）', () => {
+    const placeholder = t('imagePlaceholder')
+    expect(contentTextOf([{ type: 'image' }], { omitAttachedImages: true })).toBe(placeholder)
+    expect(contentTextOf([{ type: 'image', attachment: null }], { omitAttachedImages: true })).toBe(placeholder)
   })
 })
 

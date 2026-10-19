@@ -50,17 +50,24 @@ interface LooseBlock {
   kind?: unknown
   text?: unknown
   name?: unknown
+  attachment?: unknown
 }
 
 /** ContentBlock[] → 纯文本：text 块拼接；image 块降级占位；其余忽略。 */
-export function contentTextOf(content: unknown): string {
+export function contentTextOf(content: unknown, options?: { omitAttachedImages?: boolean }): string {
   if (!Array.isArray(content)) return ''
   const parts: string[] = []
   for (const block of content) {
     if (typeof block !== 'object' || block === null) continue
     const b = block as LooseBlock
     if (b.type === 'text' && typeof b.text === 'string') parts.push(b.text)
-    else if (b.type === 'image') parts.push(t('imagePlaceholder'))
+    else if (b.type === 'image') {
+      // 带 attachment 的图片由 MessageImages 渲染成缩略图；调用方声明接管后
+      // 不再追加占位行，否则「缩略图 + [图片]」重复显示（2026-10-19 实测）。
+      const attached = b.attachment !== undefined && b.attachment !== null
+      if (options?.omitAttachedImages === true && attached) continue
+      parts.push(t('imagePlaceholder'))
+    }
   }
   return parts.join('\n')
 }
@@ -123,9 +130,9 @@ export function nodeToMessage(node: unknown): ChatMessage | null {
   const n = node as Record<string, unknown>
   switch (n.kind) {
     case 'user':
-      return { key: seqKey('u', n), ...seqOf(n), role: 'user', text: contentTextOf(n.content), ...imagesOf(n.content) }
+      return { key: seqKey('u', n), ...seqOf(n), role: 'user', text: contentTextOf(n.content, { omitAttachedImages: true }), ...imagesOf(n.content) }
     case 'steering':
-      return { key: seqKey('s', n), ...seqOf(n), role: 'user', text: contentTextOf(n.content), ...imagesOf(n.content) }
+      return { key: seqKey('s', n), ...seqOf(n), role: 'user', text: contentTextOf(n.content, { omitAttachedImages: true }), ...imagesOf(n.content) }
     case 'assistant': {
       const { text, reasoning, hasToolCall } = assistantParts(n.blocks)
       // 纯工具调用头的 assistant 节点不渲染（tool-result 节点承载工具卡片）。
