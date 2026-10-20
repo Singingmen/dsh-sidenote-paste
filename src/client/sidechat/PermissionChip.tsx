@@ -10,7 +10,7 @@
  * read-only / workspace-write / danger-full-access）；此前实现硬编码了后两档，
  * 把 `read-only` 漏掉了。行构建逻辑见 `menu-model.ts`（纯函数，可单测）。
  */
-import { useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Menu, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
 import { IconChevronDownOutlineRegular, IconInspectOutlineRegular } from '../host/icons.ts'
 import type { Context, PermissionCatalogFace, SessionFace } from '../host/contracts.ts'
@@ -27,9 +27,18 @@ interface KnobState {
   approval?: string | null
 }
 
+/** `session.command()` 的返回形状（失败时**返回**而非抛出，必须显式检查）。 */
+interface CommandOutcome {
+  ok?: boolean
+  value?: { matched?: boolean }
+  error?: { code?: string; message?: string }
+}
+
 export function PermissionChip(props: { ctx: Context; session: SessionFace | undefined }) {
   useLocaleTick()
   const [open, setOpen] = useState(false)
+  /** 最近一次切换失败的原因（4 秒后自动清除）。宿主的 command() 不抛异常，只回 {ok:false}。 */
+  const [error, setError] = useState<string | null>(null)
   // 宿主档位目录（懒加载：首次展开才拉；catalog 是宿主级 RPC）。
   const [catalog, setCatalog] = useState<PermissionCatalogFace | null>(null)
 
@@ -43,6 +52,12 @@ export function PermissionChip(props: { ctx: Context; session: SessionFace | und
     (fn) => face?.subscribe(fn) ?? (() => {}),
     () => (face?.getSnapshot() as KnobState | undefined) ?? null,
   )
+
+  useEffect(() => {
+    if (error === null) return
+    const timer = setTimeout(() => { setError(null) }, 4000)
+    return () => { clearTimeout(timer) }
+  }, [error])
 
   // preset 缺省 = 组合默认（默认部署 = workspace-write + ask）。
   const effective = knob?.preset ?? 'workspace-write'
@@ -65,7 +80,8 @@ export function PermissionChip(props: { ctx: Context; session: SessionFace | und
         <button
           type="button"
           className={css.modelSelect}
-          title={t('permChipTitle')}
+          title={error ?? t('permChipTitle')}
+          style={error === null ? undefined : { color: 'var(--dsh-danger, #d9480f)' }}
           onClick={() => {
             const next = !open
             setOpen(next)
@@ -83,7 +99,29 @@ export function PermissionChip(props: { ctx: Context; session: SessionFace | und
       onClose={() => { setOpen(false) }}
       onSelect={(id) => {
         setOpen(false)
-        void props.session?.command(`/permission ${id}`).catch(() => {})
+        const pending = props.session?.command(`/permission ${id}`)
+        if (pending === undefined) {
+          console.warn('[sidenote] permission switch skipped: no live session bound')
+          setError(t('permSwitchFailed', { reason: 'no live session' }))
+          return
+        }
+        void pending.then((raw) => {
+          const result = raw as CommandOutcome | undefined
+          if (result !== undefined && result.ok === false) {
+            const code = result.error?.code ?? 'unknown'
+            const message = result.error?.message ?? ''
+            console.warn('[sidenote] /permission failed:', code, message)
+            setError(t('permSwitchFailed', { reason: message === '' ? code : message }))
+            return
+          }
+          if (result !== undefined && result.value?.matched === false) {
+            console.warn('[sidenote] host offers no /permission command')
+            setError(t('permSwitchFailed', { reason: 'no /permission command' }))
+          }
+        }).catch((error: unknown) => {
+          console.warn('[sidenote] /permission threw:', error)
+          setError(t('permSwitchFailed', { reason: String(error) }))
+        })
       }}
     />
   )
