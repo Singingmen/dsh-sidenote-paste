@@ -3,7 +3,8 @@
  * 点击弹 Menu 切换（原生同路径：`session.command('/permission <id>')`）。
  *
  * 数据：session.projections.faceOf('permissions')（off-face——缺席则 chip
- * 不渲染）。KnobState = {preset, sandbox, approval}，preset null = 组合默认。
+ * 不渲染）。快照读 **wire view 的 `currentValue`**（不是内部 knob state，
+ * 详见 `PermissionSnapshot` 的注释 —— 读错字段正是「恒显示工作区内修改」的根因）。
  *
  * 档位清单：宿主 `remote.permissionPresets.catalog()`（懒加载，展开时拉一次）。
  * **不写死档位表** —— 宿主 `presets` 是可自定义字典（dsh-base 默认三档：
@@ -20,11 +21,17 @@ import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
 import css from './sidechat.module.css'
 
-/** KnobState 镜像（dsh-permission-presets：preset/sandbox/approval 三旋钮）。 */
-interface KnobState {
-  preset?: string | null
-  sandbox?: string | null
-  approval?: string | null
+/**
+ * 宿主 `permissions` 投影的 **wire view**：只有一个 `currentValue` 字段。
+ *
+ * `{preset, sandbox, approval}` 是投影**内部 state**（stateSchema），客户端拿不到 ——
+ * 读它会让 chip **恒显示默认档**（上游 v0.4.5 的 7d8c715 已定性，见该包
+ * `wire.viewSchema = selectionSchema` / `view: (state) => ({ currentValue: this.derive(state) })`）。
+ *
+ * `currentValue` = `derive()` 的结果：匹配到的 preset 名，或 `"custom"`（无档位匹配）。
+ */
+interface PermissionSnapshot {
+  currentValue?: string
 }
 
 /** `session.command()` 的返回形状（失败时**返回**而非抛出，必须显式检查）。 */
@@ -48,9 +55,9 @@ export function PermissionChip(props: { ctx: Context; session: SessionFace | und
     return typeof p?.projections?.faceOf === 'function' ? p.projections.faceOf('permissions') : undefined
   }, [props.session])
 
-  const knob = useSyncExternalStore(
+  const snapshot = useSyncExternalStore(
     (fn) => face?.subscribe(fn) ?? (() => {}),
-    () => (face?.getSnapshot() as KnobState | undefined) ?? null,
+    () => (face?.getSnapshot() as PermissionSnapshot | undefined) ?? null,
   )
 
   useEffect(() => {
@@ -59,11 +66,11 @@ export function PermissionChip(props: { ctx: Context; session: SessionFace | und
     return () => { clearTimeout(timer) }
   }, [error])
 
-  // preset 缺省 = 组合默认（默认部署 = workspace-write + ask）。
-  const effective = knob?.preset ?? 'workspace-write'
+  // currentValue 缺席（老宿主 / 面未就绪）按部署默认档显示。
+  const effective = snapshot?.currentValue ?? 'workspace-write'
   const rows: PermissionRow[] = useMemo(() => permissionRows(catalog, effective), [catalog, effective])
 
-  if (face === undefined || knob === null) return null
+  if (face === undefined || snapshot === null) return null
 
   const items: MenuEntry[] = rows.map(r => ({
     id: r.value,
