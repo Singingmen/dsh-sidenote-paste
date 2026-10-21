@@ -60,9 +60,24 @@ interface WebServerLike {
   }): () => void
 }
 
-interface AgentsLike {
-  get(id: string): { inject(message: unknown): void } | undefined
+/**
+ * `Agent` 的结构面子集（权威：`dsh-agent-loop/lib/types/agent.d.ts` 的
+ * `ReactLoopAgent`：`readonly id: SessionId` + `inject(input: UserMessage)`）。
+ */
+interface AgentLike {
+  id?: unknown
+  inject(message: unknown): void
 }
+
+/**
+ * **live agent 注册表**（sessionId → agent）。
+ *
+ * 旧实现走 `ctx.get('agents').get(sessionId)` —— 该服务在 DSH 0.2.x 上取不到，
+ * 于是无论父会话是否活跃都恒回 `no-live-agent`（实测：对当前运行中的会话请求
+ * 同样返回该错误）。改为自己维护：宿主把 agent 交在 `agent/created` 事件的
+ * payload 里，`agent/disposed` 时移除。
+ */
+export type AgentRegistry = Map<string, AgentLike>
 
 interface WebRuntimeLike {
   trustedHosts?: readonly string[]
@@ -71,6 +86,8 @@ interface WebRuntimeLike {
 interface HostContext {
   get(name: string): unknown
   effect(fn: () => void | (() => void), label?: string): unknown
+  /** cordis 事件订阅（`agent/created` / `agent/disposed`）。返回解除函数。 */
+  on(event: string, listener: (payload: unknown) => void): unknown
 }
 
 // ── wire 工具（最小集，better-sidebar src/wire.ts 同款） ────────────────────
@@ -114,7 +131,7 @@ interface ReflowPayload {
 
 /** reflow 注入处理：父会话 agent 在 → inject；不在 → ok:false（客户端回落搭车）。
  *  导出供单测（宿主 handler 的 fence/校验/降级路径）。 */
-export function makeReflowHandler(ctx: HostContext) {
+export function makeReflowHandler(ctx: HostContext, registry: AgentRegistry = new Map()) {
   return async (req: HttpRequestLike, res: HttpResponseLike): Promise<void> => {
     const method = (req as { method?: string }).method
     if (method !== 'POST') {
@@ -139,8 +156,7 @@ export function makeReflowHandler(ctx: HostContext) {
       writeJson(res, 400, { ok: false, error: 'bad-request: parentSessionId/items required' })
       return
     }
-    const agents = ctx.get('agents') as AgentsLike | undefined
-    const agent = agents?.get(body.parentSessionId)
+    const agent = registry.get(body.parentSessionId)
     if (agent === undefined || typeof agent.inject !== 'function') {
       // 父会话无 live agent（未在屏/冷）——客户端回落搭车形态。
       writeJson(res, 200, { ok: false, error: 'no-live-agent' })
@@ -173,6 +189,26 @@ export function makeReflowHandler(ctx: HostContext) {
 
 export function apply(ctx: unknown): void {
   const host = ctx as HostContext
+
+  // live agent 注册表：DSH 0.2.x 没有可用的 `agents` 服务，但宿主把 agent 本身
+  // 放在 `agent/created` / `agent/disposed` 的 payload 里——自己记账即可。
+  const registry: AgentRegistry = new Map()
+  if (typeof host.on === 'function') {
+    host.on('agent/created', (payload) => {
+      const agent = (payload as { agent?: AgentLike } | undefined)?.agent
+      const id = agent?.id
+      if (agent === undefined || id === undefined || id === null) return
+      registry.set(String(id), agent)
+    })
+    host.on('agent/disposed', (payload) => {
+      const id = (payload as { agent?: AgentLike } | undefined)?.agent?.id
+      if (id === undefined || id === null) return
+      registry.delete(String(id))
+    })
+  } else {
+    console.warn('[dsh-sidenote] 宿主半包：ctx.on 面缺席，live agent 记账不可用（reflow 将恒降级搭车）')
+  }
+
   // webServer 面的获取必须走动态 inject（等服务）：cordis 的 ctx.get 对未在
   // inject 清单里的服务不可达（真机实证：静态 get 探测拿到 undefined，
   // 路由静默不注册）。webServer 在 headless/CLI 形态缺席——inject 回调永不
@@ -189,7 +225,7 @@ export function apply(ctx: unknown): void {
     return webServer.register({
       kind: 'exact',
       path: '/sidenote/reflow',
-      handler: makeReflowHandler(host),
+      handler: makeReflowHandler(host, registry),
     })
   })
 }
