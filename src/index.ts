@@ -140,9 +140,19 @@ interface ReflowPayload {
 
 /** reflow 注入处理：父会话 agent 在 → inject；不在 → ok:false（客户端回落搭车）。
  *  导出供单测（宿主 handler 的 fence/校验/降级路径）。 */
+export interface ReflowDiagnostics {
+  /** inject(['agents']) 是否已触发（服务就绪回调跑过）。 */
+  agentsInjected: boolean
+  /** 注入的 scope 上 `agents` 是否为可用对象。 */
+  agentsServiceSeen: boolean
+  /** 自记账表里已知的 sessionId（agent/created 事件收件数）。 */
+  registryIds: readonly string[]
+}
+
 export function makeReflowHandler(
   ctx: HostContext,
   resolveAgent: (sessionId: string) => AgentLike | undefined = () => undefined,
+  diagnose: () => ReflowDiagnostics = () => ({ agentsInjected: false, agentsServiceSeen: false, registryIds: [] }),
 ) {
   return async (req: HttpRequestLike, res: HttpResponseLike): Promise<void> => {
     const method = (req as { method?: string }).method
@@ -171,7 +181,9 @@ export function makeReflowHandler(
     const agent = resolveAgent(body.parentSessionId)
     if (agent === undefined || typeof agent.inject !== 'function') {
       // 父会话无 live agent（未在屏/冷）——客户端回落搭车形态。
-      writeJson(res, 200, { ok: false, error: 'no-live-agent' })
+      // 一并回诊断：区分「服务没拿到」与「服务在但没有该 session」，
+      // 否则只能反复猜（本问题已因此绕了 3 轮）。
+      writeJson(res, 200, { ok: false, error: 'no-live-agent', diagnostics: diagnose() })
       return
     }
     // summary 收敛到官方上限（CONTEXT_SUMMARY_MAX_CHARS=120；审查 m3）。
@@ -220,15 +232,19 @@ export function apply(ctx: unknown): void {
   // ① agents：注入的 scope 就是带该服务的子上下文，直接读 scope.agents。
   //    同时用它的 scope.on 记账作兜底（agents 服务缺席时仍能注已见过的 agent）。
   let agentsRef: AgentsLike | undefined
+  let agentsInjected = false
   const registry: AgentRegistry = new Map()
   injectDyn.call(ctx, ['agents'], (scoped) => {
+    agentsInjected = true
     const s = scoped as {
       agents?: AgentsLike
       on?: (event: string, listener: (payload: unknown) => void) => unknown
     } | undefined
     agentsRef = s?.agents
     console.log(
-      `[dsh-sidenote] agents 面就绪：${agentsRef === undefined ? 'undefined' : 'ok'}`,
+      `[dsh-sidenote] agents 面就绪：${agentsRef === undefined ? 'undefined' : 'ok'}（scope keys: ${
+        s === undefined ? 'n/a' : Object.keys(s).slice(0, 12).join(',')
+      }）`,
     )
     if (typeof s?.on !== 'function') return
     s.on('agent/created', (payload) => {
@@ -253,7 +269,15 @@ export function apply(ctx: unknown): void {
       kind: 'exact',
       path: '/sidenote/reflow',
       // 优先官方 agents 服务，退到自记账。
-      handler: makeReflowHandler(host, (id) => agentsRef?.get(id) ?? registry.get(id)),
+      handler: makeReflowHandler(
+        host,
+        (id) => agentsRef?.get(id) ?? registry.get(id),
+        () => ({
+          agentsInjected,
+          agentsServiceSeen: agentsRef !== undefined,
+          registryIds: [...registry.keys()],
+        }),
+      ),
     })
   })
 }
