@@ -249,6 +249,25 @@ export function createReflowStore(
       persist(key)
       notify()
     },
-    list: (sessionId) => items.filter(i => sameSessionId(i.sessionId, sessionId)),
+    list: (sessionId) => {
+      const exact = items.filter(i => sameSessionId(i.sessionId, sessionId))
+      if (exact.length > 0) return exact
+      // 兜底：chip 与发送拦截器取会话 id 的**来源不同** —— chip 用槽注入的
+      // sessionId，发送侧用 `sessions.list.getSnapshot().current`。实测两者
+      // 不一致时：chip 正常显示「N 条侧边回流」，而 commitAsync 查到 0 条 ⇒
+      // tryInjectReflows 提前 return（items 为空就根本不发请求）⇒ 回流静默
+      // 丢失（2026-10-25 现场，服务端 recentClientPosts 为空即此故）。
+      //
+      // 待发项若**全部属于同一个会话**，那这次发送只可能是发给它：放行。
+      const distinct = new Set(items.map(i => i.sessionId))
+      if (items.length > 0 && distinct.size === 1) {
+        console.warn('[dsh-sidenote] 回流项会话 id 与当前会话不一致，按唯一待发会话兜底:', {
+          requested: sessionId,
+          stored: [...distinct][0],
+        })
+        return items
+      }
+      return exact
+    },
   }
 }
