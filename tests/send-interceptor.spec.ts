@@ -75,6 +75,7 @@ function makeHarness(options: { draft?: string; buttonDisabled?: boolean; withAn
     add: () => { throw new Error('unused in this spec') },
     remove: (id: number) => { removed.push(id) },
     clearSession: () => {},
+    debugSessionIds: () => (reflowItems.length > 0 ? [SESSION] : []),
     list: () => reflowItems.map(item => ({
       id: item.id,
       sessionId: SESSION,
