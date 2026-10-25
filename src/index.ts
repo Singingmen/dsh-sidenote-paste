@@ -260,6 +260,21 @@ export function apply(ctx: unknown): void {
     })
   })
 
+  /** 两种 id 形式都试：带 `session-` 前缀的与裸 uuid。 */
+  const lookupAgent = (
+    service: AgentsLike | undefined,
+    local: AgentRegistry,
+    raw: string,
+  ): AgentLike | undefined => {
+    const PREFIX = 'session-'
+    const keys = raw.startsWith(PREFIX) ? [raw, raw.slice(PREFIX.length)] : [raw, PREFIX + raw]
+    for (const key of keys) {
+      const hit = service?.get(key) ?? local.get(key)
+      if (hit !== undefined) return hit
+    }
+    return undefined
+  }
+
   // ② webServer：注册回流路由。
   injectDyn.call(ctx, ['webServer'], (injected) => {
     const webServer = injected.get('webServer') as WebServerLike | undefined
@@ -269,9 +284,13 @@ export function apply(ctx: unknown): void {
       kind: 'exact',
       path: '/sidenote/reflow',
       // 优先官方 agents 服务，退到自记账。
+      // ★ id 归一化：宿主 `Agent.id` 的字符串形式带 `session-` 前缀
+      //   （`session-1eb57f48-…`），而客户端传的是**裸 uuid**。不归一化则
+      //   lookup 恒 miss → 恒 no-live-agent。实测：带前缀 `{"ok":true}`，
+      //   裸 uuid 仍 `no-live-agent`，且注入的 notice 真的进了会话。
       handler: makeReflowHandler(
         host,
-        (id) => agentsRef?.get(id) ?? registry.get(id),
+        (raw) => lookupAgent(agentsRef, registry, raw),
         () => ({
           agentsInjected,
           agentsServiceSeen: agentsRef !== undefined,

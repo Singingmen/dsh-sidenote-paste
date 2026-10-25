@@ -30,6 +30,22 @@ export interface ReflowInjectResult {
 }
 
 /** 尝试经宿主路由注入一批回流项；任何失败都降级为「全未注入」。 */
+/**
+ * 宿主会话 id 的线格式前缀。
+ *
+ * `ctx.sessions.list.getSnapshot().current` 给的是**裸 uuid**，而宿主
+ * `Agent.id`（服务端 agents 注册表的 key）是 `session-<uuid>`。服务端已做双向
+ * 归一化，这里再补一次：两边任一侧缺归一化都不会再让回流静默失效
+ * （实测：带前缀 `{"ok":true}` 且 notice 真的进了会话；裸 uuid 恒
+ * `no-live-agent`）。
+ */
+const SESSION_ID_PREFIX = 'session-'
+
+/** 归一化到宿主线格式（已带前缀则原样返回，幂等）。 */
+export function hostSessionId(id: string): string {
+  return id.startsWith(SESSION_ID_PREFIX) ? id : SESSION_ID_PREFIX + id
+}
+
 export async function tryInjectReflows(parentSessionId: string, items: readonly ReflowItem[]): Promise<ReflowInjectResult> {
   if (items.length === 0) return { injectedIds: new Set() }
   const empty: ReflowInjectResult = { injectedIds: new Set() }
@@ -42,7 +58,7 @@ export async function tryInjectReflows(parentSessionId: string, items: readonly 
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          parentSessionId,
+          parentSessionId: hostSessionId(parentSessionId),
           // inject 形态下块是独立 plugin-source 消息（审查 M6：自造标签在
           // 无用户正文相伴时可能被当第三方元数据）——前置一行自然语言引导
           // 规避。搭车路径的块结构不变（气泡反解析兼容）。
