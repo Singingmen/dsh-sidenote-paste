@@ -46,6 +46,23 @@ export function hostSessionId(id: string): string {
   return id.startsWith(SESSION_ID_PREFIX) ? id : SESSION_ID_PREFIX + id
 }
 
+/** 去掉 `session-` 前缀的裸 id（幂等）。 */
+function bareSessionId(id: string): string {
+  return id.startsWith(SESSION_ID_PREFIX) ? id.slice(SESSION_ID_PREFIX.length) : id
+}
+
+/**
+ * 两条会话 id 是否指向同一会话。
+ *
+ * 回流项由侧边面板用 `meta.parentSessionId` 写入，而发送时查的是
+ * `sessions.list.current` —— 两者只要一个带 `session-` 前缀、另一个不带，
+ * 精确比较就恒为 false：**chip 照旧显示，但发送时回流列表为空**，既不注入
+ * 也不搭车，内容静默消失（2026-10-25 实测现场）。
+ */
+export function sameSessionId(a: string, b: string): boolean {
+  return bareSessionId(a) === bareSessionId(b)
+}
+
 export async function tryInjectReflows(parentSessionId: string, items: readonly ReflowItem[]): Promise<ReflowInjectResult> {
   if (items.length === 0) return { injectedIds: new Set() }
   const empty: ReflowInjectResult = { injectedIds: new Set() }
@@ -226,11 +243,12 @@ export function createReflowStore(
       notify()
     },
     clearSession(sessionId) {
-      if (!items.some(i => i.sessionId === sessionId)) return
-      items = items.filter(i => i.sessionId !== sessionId)
-      persist(sessionId)
+      const key = items.find(i => sameSessionId(i.sessionId, sessionId))?.sessionId
+      if (key === undefined) return
+      items = items.filter(i => !sameSessionId(i.sessionId, sessionId))
+      persist(key)
       notify()
     },
-    list: (sessionId) => items.filter(i => i.sessionId === sessionId),
+    list: (sessionId) => items.filter(i => sameSessionId(i.sessionId, sessionId)),
   }
 }
