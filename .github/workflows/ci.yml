@@ -1,14 +1,10 @@
 name: CI
 
+# 个人 fork：上游这套 CI 跑的是它自己的宿主版本矩阵（0.1.1/0.1.2/0.1.5/0.1.7/0.2.x
+# + better-sidebar 组合），在本仓库恒失败，且每次 push 都会发告警邮件。改为仅手动
+# 触发：需要时可在 Actions 页点 "Run workflow"。
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
-  # 宿主版本 canary：每周一跑 latest 组合（发现「宿主新版悄悄发布」的触发机制，
-  # 对抗矩阵滞后——arch-adversarial B1-3）。
-  schedule:
-    - cron: '0 1 * * 1'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

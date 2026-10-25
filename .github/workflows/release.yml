@@ -33,9 +33,10 @@ name: Release
 #   3. Save. Do NOT add an NPM_TOKEN secret — Trusted Publishing replaces it.
 # Canonical reference: https://docs.npmjs.com/trusted-publishers
 
+# 个人 fork：上游这条工作流用 npm Trusted Publishing 发布 **上游的** `dsh-sidenote`。
+# 在本仓库它没有权限、也绝不该发别人的包；且每次建 Release 都会触发一次失败运行。
+# 改为仅手动（且默认 dry_run），保留文件作参考。
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       dry_run:
