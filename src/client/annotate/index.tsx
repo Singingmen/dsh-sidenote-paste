@@ -19,6 +19,7 @@ import { createSelectionController } from './selection.ts'
 import { AnnotateOverlay } from './overlay.tsx'
 import { createAnnotationChip, createReflowChip } from './chip.tsx'
 import { installSendInterceptor } from './send.ts'
+import { readMainSession } from '../host/current-session.ts'
 import { installBubbleSurgery } from './bubble.ts'
 import type { ReflowStore } from '../reflow.ts'
 
@@ -26,7 +27,11 @@ export function registerAnnotations(ctx: Context, reflow: ReflowStore): void {
   ctx.effect(() => {
     try {
       const store = createAnnotationStore()
-      const controller = createSelectionController(() => ctx.sessions.list.getSnapshot().current ?? '')
+      // 同一坑：0.2.x 没有 `current`，注释锚点会全部落到空会话上。
+      const controller = createSelectionController(() => {
+        const current = (ctx.sessions.list.getSnapshot() as { current?: unknown } | undefined)?.current
+        return typeof current === 'string' && current !== '' ? current : readMainSession()
+      })
 
       // The overlay root: toolbar + badges + highlight + editor + sent viewer.
       const host = document.createElement('div')

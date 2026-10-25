@@ -35,6 +35,7 @@ import type { Context, ConversationService, SessionId, SessionInput } from '../h
 import { buildProtocolBlock } from './format.ts'
 import type { AnnotationStore } from './model.ts'
 import { buildReflowBlock, reportClientEvent, tryInjectReflows, type ReflowItem, type ReflowStore } from '../reflow.ts'
+import { readMainSession } from '../host/current-session.ts'
 
 /** Resolve the per-session input facade, degrading to undefined (never throws). */
 export function resolveInput(ctx: Context, sessionId: SessionId): SessionInput | undefined {
@@ -93,12 +94,22 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     swallowTimer = window.setTimeout(clearSwallow, 2_000)
   }
 
+  /**
+   * 当前主会话 id。
+   *
+   * DSH 0.2.x 的 `sessions.list` 快照**没有 `current` 字段**（SessionListState 只有
+   * ids/byId/phase/projectionsBySession），旧实现在这里恒得 ''，导致 `hijack()`
+   * 第一行就 return false —— 注释与回流**从不随消息发出**。权威来源是 composer
+   * dock 槽的 `props.session.sessionId`（chip 用的就是它），由 current-session.ts 记录。
+   */
   const currentSessionId = (): string => {
     try {
-      return ctx.sessions.list.getSnapshot().current ?? ''
+      const current = (ctx.sessions.list.getSnapshot() as { current?: unknown } | undefined)?.current
+      if (typeof current === 'string' && current !== '') return current
     } catch {
-      return ''
+      // 面缺席 → 落到槽注入值
     }
+    return readMainSession()
   }
 
   /**

@@ -14,6 +14,7 @@ import { IconCloseOutlineRegular, IconListPenOutlineRegular, IconShareOutlineReg
 import type { InputZone } from '../host/contracts.ts'
 import type { AnnotationStore } from './model.ts'
 import type { ReflowStore } from '../reflow.ts'
+import { noteMainSession } from '../host/current-session.ts'
 import { t } from '../locales.ts'
 import { useLocaleTick } from '../locale-tick.ts'
 import { AnnotateErrorBoundary } from './overlay.tsx'
@@ -30,6 +31,7 @@ export function createAnnotationChip(store: AnnotationStore) {
   function AnnotationChip(props: ChipProps): ReactNode {
     useLocaleTick()
     const sessionId = props.session.sessionId
+    noteMainSession(sessionId)
     useSyncExternalStore(
       useCallback((cb: () => void) => store.subscribe(cb), [store]),
       () => store.getSnapshot(),
@@ -127,6 +129,7 @@ export function createReflowChip(reflow: ReflowStore) {
   function ReflowChip(props: ChipProps): ReactNode {
     useLocaleTick()
     const sessionId = props.session.sessionId
+    noteMainSession(sessionId)
     useSyncExternalStore(
       useCallback((cb: () => void) => reflow.subscribe(cb), [reflow]),
       () => reflow.getSnapshot(),
