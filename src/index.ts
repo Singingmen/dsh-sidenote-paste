@@ -138,8 +138,6 @@ interface ReflowPayload {
   items?: unknown
 }
 
-/** reflow 注入处理：父会话 agent 在 → inject；不在 → ok:false（客户端回落搭车）。
- *  导出供单测（宿主 handler 的 fence/校验/降级路径）。 */
 export interface ReflowDiagnostics {
   /** inject(['agents']) 是否已触发（服务就绪回调跑过）。 */
   agentsInjected: boolean
@@ -149,6 +147,30 @@ export interface ReflowDiagnostics {
   registryIds: readonly string[]
 }
 
+/**
+ * 最近若干次**来自客户端的**回流请求（仅存内存）。
+ *
+ * 存在的理由：回流有三段可能断掉（拦截器没触发 / store 查不到项 / 服务端注入失败），
+ * 而前两段都在浏览器里、从会话日志看不见。把请求本身记下来，就能一眼分开
+ * 「客户端根本没发」和「发了但服务端失败」——不用再靠猜。
+ */
+export interface ReflowPostLog {
+  at: number
+  sessionId: string
+  items: number
+  outcome: string
+}
+
+const recentClientPosts: ReflowPostLog[] = []
+const MAX_POST_LOG = 20
+
+function recordPost(entry: ReflowPostLog): void {
+  recentClientPosts.push(entry)
+  if (recentClientPosts.length > MAX_POST_LOG) recentClientPosts.shift()
+}
+
+/** reflow 注入处理：父会话 agent 在 → inject；不在 → ok:false（客户端回落搭车）。
+ *  导出供单测（宿主 handler 的 fence/校验/降级路径）。 */
 export function makeReflowHandler(
   ctx: HostContext,
   resolveAgent: (sessionId: string) => AgentLike | undefined = () => undefined,
@@ -172,14 +194,21 @@ export function makeReflowHandler(
       writeJson(res, 400, { ok: false, error: 'bad-request' })
       return
     }
+    // 诊断读出口：`{"diag":true}` 取回最近请求与 agents 面状态（只读，不注入）。
+    if ((body as { diag?: unknown }).diag === true) {
+      writeJson(res, 200, { ok: true, recentClientPosts, ...diagnose() })
+      return
+    }
     const items = Array.isArray(body.items) ? body.items as ReflowItemPayload[] : []
     const valid = items.filter(item => typeof item.text === 'string' && item.text !== '')
     if (typeof body.parentSessionId !== 'string' || body.parentSessionId === '' || valid.length === 0) {
+      recordPost({ at: Date.now(), sessionId: String(body.parentSessionId ?? ''), items: valid.length, outcome: 'bad-request' })
       writeJson(res, 400, { ok: false, error: 'bad-request: parentSessionId/items required' })
       return
     }
     const agent = resolveAgent(body.parentSessionId)
     if (agent === undefined || typeof agent.inject !== 'function') {
+      recordPost({ at: Date.now(), sessionId: String(body.parentSessionId), items: valid.length, outcome: 'no-live-agent' })
       // 父会话无 live agent（未在屏/冷）——客户端回落搭车形态。
       // 一并回诊断：区分「服务没拿到」与「服务在但没有该 session」，
       // 否则只能反复猜（本问题已因此绕了 3 轮）。
@@ -207,6 +236,7 @@ export function makeReflowHandler(
         console.warn('[dsh-sidenote] reflow 注入单条失败:', error)
       }
     }
+    recordPost({ at: Date.now(), sessionId: String(body.parentSessionId), items: valid.length, outcome: 'injected' })
     writeJson(res, 200, { ok: true })
   }
 }
