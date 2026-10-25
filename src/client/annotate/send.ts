@@ -34,7 +34,7 @@
 import type { Context, ConversationService, SessionId, SessionInput } from '../host/contracts.ts'
 import { buildProtocolBlock } from './format.ts'
 import type { AnnotationStore } from './model.ts'
-import { buildReflowBlock, tryInjectReflows, type ReflowItem, type ReflowStore } from '../reflow.ts'
+import { buildReflowBlock, reportClientEvent, tryInjectReflows, type ReflowItem, type ReflowStore } from '../reflow.ts'
 
 /** Resolve the per-session input facade, degrading to undefined (never throws). */
 export function resolveInput(ctx: Context, sessionId: SessionId): SessionInput | undefined {
@@ -169,7 +169,15 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     if (sessionId === '') return false
     const active = store.listActive(sessionId)
     const reflows = reflow.list(sessionId)
-    if (active.length === 0 && reflows.length === 0) return false
+    if (active.length === 0 && reflows.length === 0) {
+      // 诊断：拦截器跑到了，但两个 store 都查不到 —— 把两侧 id 报给服务端
+      // （拼进 marker，服务端原样记录，无需服务端改动）。
+      const stored = reflow.debugSessionIds()
+      if (stored.length > 0) {
+        reportClientEvent(`bail-empty cur=${sessionId} stored=${stored.join(',')}`)
+      }
+      return false
+    }
     const input = resolveInput(ctx, sessionId)
     if (input === undefined) return false
     const snap = input.state.getSnapshot()

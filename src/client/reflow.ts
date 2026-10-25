@@ -42,15 +42,20 @@ export interface ReflowInjectResult {
 const SESSION_ID_PREFIX = 'session-'
 
 /** 客户端包构建标记：启动时自报到服务端，用来确认浏览器实际加载的是哪一版。 */
-export const CLIENT_BUILD = '2026.10.25-5'
+export const CLIENT_BUILD = '2026.10.25-6'
 
-/** 启动自报（fire-and-forget；失败静默，不影响任何功能）。 */
-export function announceClientBuild(): void {
+/** 客户端事件自报（fire-and-forget）。detail 拼进 marker，服务端原样记录。 */
+export function reportClientEvent(detail: string): void {
   void fetch('/sidenote/reflow', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ diag: true, clientReport: { marker: CLIENT_BUILD } }),
+    body: JSON.stringify({ diag: true, clientReport: { marker: `${CLIENT_BUILD}#${detail}` } }),
   }).catch(() => {})
+}
+
+/** 启动自报（fire-and-forget；失败静默，不影响任何功能）。 */
+export function announceClientBuild(): void {
+  reportClientEvent('boot')
 }
 
 /** 归一化到宿主线格式（已带前缀则原样返回，幂等）。 */
@@ -133,6 +138,8 @@ export interface ReflowStore {
   /** 发送确认后清空该会话的待回流集（一次性消费）。 */
   clearSession(sessionId: string): void
   list(sessionId: string): readonly ReflowItem[]
+  /** 诊断：当前待发项里出现过的所有 sessionId（去重）。 */
+  debugSessionIds(): readonly string[]
 }
 
 const STORAGE_PREFIX = 'dsh-sidenote:reflow:v1:'
@@ -281,5 +288,6 @@ export function createReflowStore(
       }
       return exact
     },
+    debugSessionIds: () => [...new Set(items.map(i => i.sessionId))],
   }
 }
