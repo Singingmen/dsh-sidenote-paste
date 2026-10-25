@@ -41,6 +41,18 @@ export interface ReflowInjectResult {
  */
 const SESSION_ID_PREFIX = 'session-'
 
+/** 客户端包构建标记：启动时自报到服务端，用来确认浏览器实际加载的是哪一版。 */
+export const CLIENT_BUILD = '2026.10.25-5'
+
+/** 启动自报（fire-and-forget；失败静默，不影响任何功能）。 */
+export function announceClientBuild(): void {
+  void fetch('/sidenote/reflow', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ diag: true, clientReport: { marker: CLIENT_BUILD } }),
+  }).catch(() => {})
+}
+
 /** 归一化到宿主线格式（已带前缀则原样返回，幂等）。 */
 export function hostSessionId(id: string): string {
   return id.startsWith(SESSION_ID_PREFIX) ? id : SESSION_ID_PREFIX + id

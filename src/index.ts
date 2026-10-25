@@ -196,6 +196,11 @@ export function makeReflowHandler(
     }
     // 诊断读出口：`{"diag":true}` 取回最近请求与 agents 面状态（只读，不注入）。
     if ((body as { diag?: unknown }).diag === true) {
+      const report = (body as { clientReport?: { marker?: unknown } }).clientReport
+      if (report !== undefined) {
+        // 客户端启动自报：确认浏览器加载的是哪一版客户端包（消除「你到底刷没刷」的猜测）。
+        recordPost({ at: Date.now(), sessionId: '', items: 0, outcome: `client-report:${String(report.marker ?? '?')}` })
+      }
       writeJson(res, 200, { ok: true, recentClientPosts, ...diagnose() })
       return
     }

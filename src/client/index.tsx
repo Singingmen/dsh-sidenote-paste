@@ -11,7 +11,7 @@
 import type { Context } from './host/contracts.ts'
 import { probeHost } from './host/probes.ts'
 import { attachLocale, type LocaleServiceLike } from './locales.ts'
-import { createReflowStore } from './reflow.ts'
+import { announceClientBuild, createReflowStore } from './reflow.ts'
 import { registerSideChat } from './sidechat/index.tsx'
 import { registerAnnotations } from './annotate/index.tsx'
 import { clearNativeRuntime, setRootContext } from './sidechat/native.ts'
@@ -51,4 +51,6 @@ export function apply(ctx: Context): void {
   const reflow = createReflowStore()
   registerSideChat(ctx, reflow)
   registerAnnotations(ctx, reflow)
+  // 启动自报：让服务端知道浏览器实际加载了哪一版客户端包。
+  announceClientBuild()
 }
