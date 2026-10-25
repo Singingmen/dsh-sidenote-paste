@@ -42,7 +42,7 @@ export interface ReflowInjectResult {
 const SESSION_ID_PREFIX = 'session-'
 
 /** 客户端包构建标记：启动时自报到服务端，用来确认浏览器实际加载的是哪一版。 */
-export const CLIENT_BUILD = '2026.10.25-6'
+export const CLIENT_BUILD = '2026.10.25-7'
 
 /** 客户端事件自报（fire-and-forget）。detail 拼进 marker，服务端原样记录。 */
 export function reportClientEvent(detail: string): void {

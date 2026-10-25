@@ -64,6 +64,13 @@ function findSendButtonInCard(): HTMLButtonElement | null {
 }
 
 export function installSendInterceptor(ctx: Context, store: AnnotationStore, reflow: ReflowStore): () => void {
+  /** 每类诊断每次页面生命周期只上报一次（避免刷屏）。 */
+  const reported = new Set<string>()
+  const reportOnce = (detail: string): void => {
+    if (reported.has(detail)) return
+    reported.add(detail)
+    reportClientEvent(detail)
+  }
   /** 重入/连按护栏：事务进行中吞掉命中识别面的 Enter/点击（不重复驱动）。 */
   let committing = false
 
@@ -166,7 +173,10 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
 
   const hijack = (): boolean => {
     const sessionId = currentSessionId()
-    if (sessionId === '') return false
+    if (sessionId === '') {
+      reportOnce('hijack-no-session')
+      return false
+    }
     const active = store.listActive(sessionId)
     const reflows = reflow.list(sessionId)
     if (active.length === 0 && reflows.length === 0) {
@@ -179,17 +189,32 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
       return false
     }
     const input = resolveInput(ctx, sessionId)
-    if (input === undefined) return false
+    if (input === undefined) {
+      reportOnce(`hijack-no-input sid=${sessionId.slice(0, 12)}`)
+      return false
+    }
     const snap = input.state.getSnapshot()
     const draft = snap.draft
     if (draft.trimStart().startsWith('/')) return false
     // 机器相位守卫：claimed/adjudicating/submitting = 弹窗/命令/事务在走。
-    if (snap.phase !== 'plain') return false
+    if (snap.phase !== 'plain') {
+      reportOnce(`hijack-phase=${String(snap.phase)}`)
+      return false
+    }
     // 弹窗 DOM 守卫：@引用 listbox、「+」菜单展开等。
     const seat = composerSeat()
-    if (seat === null) return false
-    if (seat.querySelector('[role="listbox"]') !== null) return false
-    if (seat.querySelector('[aria-expanded="true"]') !== null) return false
+    if (seat === null) {
+      reportOnce('hijack-no-seat')
+      return false
+    }
+    if (seat.querySelector('[role="listbox"]') !== null) {
+      reportOnce('hijack-listbox-open')
+      return false
+    }
+    if (seat.querySelector('[aria-expanded="true"]') !== null) {
+      reportOnce('hijack-expanded')
+      return false
+    }
 
     // 同步拦截成立，异步执行（inject 的有界等待不能在同步手势里）。
     committing = true
@@ -209,7 +234,11 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     const inSeat = target instanceof HTMLElement
       && (target.closest('[data-composer-input]') !== null || target instanceof HTMLTextAreaElement)
       && target.closest('[data-composer-seat]') !== null
-    if (!inSeat) return
+    if (!inSeat) {
+      const el = target instanceof HTMLElement ? target : null
+      reportOnce(`key-not-in-seat tag=${el?.tagName ?? '?'} input=${el?.closest('[data-composer-input]') !== null} seat=${el?.closest('[data-composer-seat]') !== null}`)
+      return
+    }
     if (committing) {
       if (event.key === 'Enter') {
         event.preventDefault()
@@ -247,7 +276,10 @@ export function installSendInterceptor(ctx: Context, store: AnnotationStore, ref
     }
     // 识别面收窄到卡片内末位按钮（goal bar 在 card 外、不构成误点）；
     // 运行态主按钮是「停止」——相位守卫已在 hijack 内（plain 才拦）。
-    if (button !== findSendButtonInCard()) return
+    if (button !== findSendButtonInCard()) {
+      reportOnce(`click-not-send label=${(button.getAttribute('aria-label') ?? button.className ?? '').toString().slice(0, 40)}`)
+      return
+    }
     if (!hijack()) return
     event.preventDefault()
     event.stopImmediatePropagation()
